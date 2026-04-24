@@ -31,32 +31,37 @@ const Home = ({ account, mintTokens, onMarketClick, refreshBalance, refreshTrigg
         ).addOperation(countOp).build()
       );
 
-      if (countResult.result) {
         const count = StellarSdk.scValToNative(countResult.result.retval);
-        const fetchedMarkets = [];
-
-        // 2. Fetch each market (in production we'd use events or a more efficient way)
+        
+        // 2. Fetch each market concurrently
+        const marketPromises = [];
         for (let i = 0; i < count; i++) {
           const mOp = marketContract.call('get_market', StellarSdk.nativeToScVal(i, { type: 'u32' }));
-          const mResult = await server.simulateTransaction(
-            new StellarSdk.TransactionBuilder(
-              new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
-              { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
-            ).addOperation(mOp).build()
+          marketPromises.push(
+            server.simulateTransaction(
+              new StellarSdk.TransactionBuilder(
+                new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
+                { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
+              ).addOperation(mOp).build()
+            ).then(res => ({ id: i, res }))
           );
-          
-          if (mResult.result) {
-            const data = StellarSdk.scValToNative(mResult.result.retval);
-            fetchedMarkets.push({
-              id: i,
+        }
+
+        const results = await Promise.all(marketPromises);
+        const fetchedMarkets = results
+          .filter(r => r.res.result)
+          .map(r => {
+            const data = StellarSdk.scValToNative(r.res.result.retval);
+            return {
+              id: r.id,
               question: data.question.toString(),
               options: data.options.map(o => o.toString()),
               totalBets: data.total_bets.map(b => b.toString()),
               closeTime: Number(data.close_time),
               resolved: data.resolved
-            });
-          }
-        }
+            };
+          });
+
         setMarkets(fetchedMarkets);
       }
     } catch (error) {
