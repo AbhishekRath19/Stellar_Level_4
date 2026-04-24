@@ -127,9 +127,11 @@ export const useStellar = () => {
     }
 
     if (result.status === 'SUCCESS') {
+      console.log("Transaction confirmed on-chain:", response.hash);
       refreshBalance(account);
       return result;
     } else {
+      console.error("Transaction failed on-chain:", result);
       throw new Error("Transaction failed on chain");
     }
   };
