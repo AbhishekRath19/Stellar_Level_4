@@ -5,6 +5,8 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { CONTRACT_IDS } from '../hooks/useStellar';
 
 const BetForm = ({ market, marketId, submitSorobanTx, onBetPlaced, transparent = false }) => {
+  const isMobile = window.innerWidth < 640;
+
   const [selectedOption, setSelectedOption] = useState(null);
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
@@ -55,7 +57,7 @@ const BetForm = ({ market, marketId, submitSorobanTx, onBetPlaced, transparent =
   };
 
   return (
-    <div className={`${transparent ? '' : 'glass-panel p-8 sm:p-10'} space-y-10`}>
+    <div className={`${transparent ? '' : `glass-panel ${isMobile ? 'p-6' : 'p-10'}`} space-y-10`}>
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">Enter Position</h3>
         <Wallet className="text-brand-primary/40" size={24} />
