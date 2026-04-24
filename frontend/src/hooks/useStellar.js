@@ -5,7 +5,7 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 const NETWORK_PASSPHRASE = 'Test SDF Network ; September 2015';
 const RPC_URL = 'https://soroban-testnet.stellar.org';
 
-// Placeholders for deployed contracts
+// Constants for deployed contracts
 export const CONTRACT_IDS = {
   MARKET: 'CCBUIXG5G5F6F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5', // Replace after deployment
   TOKEN: 'CDBUIXG5G5F6F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5'  // Replace after deployment
