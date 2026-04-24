@@ -75,6 +75,13 @@ npm run dev
 
 ---
 
+## 🔒 Security
+- **Escrow Mechanics**: All bets are held in the `PredictionMarket` contract address.
+- **Authorization**: The `MarketToken` implements `require_auth` to prevent unauthorized transfers.
+- **Testnet Only**: This implementation is for demonstration and should be audited before mainnet use.
+
+---
+
 ## 📸 Mobile Responsive Preview
 ![Mobile View](screenshots/mobile_view.png)
 *(Optimized for iOS/Android high-density displays)*
