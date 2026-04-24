@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "prediction_market",
+    "token",
+]
+resolver = "2"
