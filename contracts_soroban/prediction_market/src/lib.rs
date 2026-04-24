@@ -23,6 +23,7 @@ pub struct PredictionMarket;
 
 #[contractimpl]
 impl PredictionMarket {
+    /// Initializes the contract with the MarketToken address.
     pub fn initialize(e: Env, token_wasm_hash: Address) {
         if e.storage().instance().has(&symbol_short!("token")) {
             panic!("Already initialized");
