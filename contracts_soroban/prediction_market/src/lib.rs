@@ -24,11 +24,11 @@ pub struct PredictionMarket;
 #[contractimpl]
 impl PredictionMarket {
     /// Initializes the contract with the MarketToken address.
-    pub fn initialize(e: Env, token_wasm_hash: Address) {
+    pub fn initialize(e: Env, token_address: Address) {
         if e.storage().instance().has(&symbol_short!("token")) {
             panic!("Already initialized");
         }
-        e.storage().instance().set(&symbol_short!("token"), &token_wasm_hash);
+        e.storage().instance().set(&symbol_short!("token"), &token_address);
     }
 
     pub fn create_market(
@@ -39,8 +39,8 @@ impl PredictionMarket {
         close_time: u64,
     ) -> u32 {
         creator.require_auth();
-        
-        let market_id = e.storage().instance().get::<_, u32>(&symbol_short!("count")).unwrap_or(0);
+        assert!(options.len() >= 2, "At least 2 options required");
+        assert!(close_time > e.ledger().timestamp(), "Close time must be in future");
         
         let mut total_bets = Vec::new(&e);
         for _ in 0..options.len() {
@@ -91,11 +91,21 @@ impl PredictionMarket {
         market.total_bets = total_bets;
         e.storage().instance().set(&market_id, &market);
 
-        // 3. Emit Event
+        // 3. Update user position
+        let user_bet_key = (symbol_short!("ubet"), market_id, user.clone(), option);
+        let current_user_bet: i128 = e.storage().persistent().get(&user_bet_key).unwrap_or(0);
+        e.storage().persistent().set(&user_bet_key, &(current_user_bet + amount));
+
+        // 4. Emit Event
         e.events().publish(
             (symbol_short!("bet"), market_id),
             (user, option, amount)
         );
+    }
+
+    pub fn get_user_bet(e: Env, market_id: u32, user: Address, option: u32) -> i128 {
+        let user_bet_key = (symbol_short!("ubet"), market_id, user, option);
+        e.storage().persistent().get(&user_bet_key).unwrap_or(0)
     }
 
     pub fn resolve_market(e: Env, market_id: u32, winning_option: u32) {
