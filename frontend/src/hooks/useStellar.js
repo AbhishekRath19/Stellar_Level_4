@@ -110,13 +110,14 @@ export const useStellar = () => {
     checkExisting();
   }, [refreshBalance]);
 
-  const mintTokens = async (amount) => {
-    if (!account) return;
+  const mintTokens = async (amount, toAddress = null) => {
+    const target = toAddress || account;
+    if (!target) return;
     const contract = new StellarSdk.Contract(CONTRACT_IDS.TOKEN);
     const amountRaw = BigInt(Math.floor(parseFloat(amount) * 1e7));
     
     const op = contract.call('mint', 
-      StellarSdk.nativeToScVal(account, { type: 'address' }),
+      StellarSdk.nativeToScVal(target, { type: 'address' }),
       StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
     );
 

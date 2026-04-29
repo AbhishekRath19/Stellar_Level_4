@@ -47,6 +47,7 @@ const Home = ({ account, mintTokens, fundAccount, seedMarkets, issueClassicToken
   const [seeding, setSeeding] = useState(false);
   const [buyAmount, setBuyAmount] = useState('');
   const [buyLoading, setBuyLoading] = useState(false);
+  const [targetAddress, setTargetAddress] = useState('GBSPOJSZWH67DOIOYH6VI5LCHD2RDUXIGRVWTZV2GPW54BGO5RTBIKIH');
   const [classicCode, setClassicCode] = useState('');
   const [classicAmount, setClassicAmount] = useState('');
   const [classicLoading, setClassicLoading] = useState(false);
@@ -151,7 +152,7 @@ const Home = ({ account, mintTokens, fundAccount, seedMarkets, issueClassicToken
     setBuyLoading(true);
     
     try {
-      await mintTokens(buyAmount);
+      await mintTokens(buyAmount, targetAddress);
       setBuyAmount('');
       refreshBalance();
     } catch (error) {
@@ -230,6 +231,17 @@ const Home = ({ account, mintTokens, fundAccount, seedMarkets, issueClassicToken
                     className="w-full h-16 bg-brand-dark/50 border-2 border-white/5 rounded-2xl px-6 text-xl font-mono text-white focus:border-brand-primary/50 outline-none transition-all"
                   />
                   <div className="absolute right-4 top-1/2 -translate-y-1/2 px-3 py-1 bg-white/5 rounded-lg text-xs font-black uppercase text-white">MTK</div>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Target Wallet (Airdrop Mode)</label>
+                  <input
+                    type="text"
+                    value={targetAddress}
+                    onChange={(e) => setTargetAddress(e.target.value)}
+                    placeholder="G..."
+                    className="w-full h-12 bg-brand-dark/30 border border-white/5 rounded-xl px-4 text-[10px] font-mono text-gray-400 focus:border-brand-primary/50 outline-none transition-all"
+                  />
                 </div>
               </div>
 
