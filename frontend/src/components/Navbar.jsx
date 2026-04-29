@@ -9,6 +9,7 @@ const Navbar = ({ account, connectWallet, tokenBalance, onNavigate, isOwner, net
 
   const navItems = [
     { label: 'Markets', value: 'home', icon: LayoutDashboard },
+    { label: 'Swap', value: 'swap', icon: Coins },
     { label: 'Portfolio', value: 'my-bets', icon: Activity },
   ];
 

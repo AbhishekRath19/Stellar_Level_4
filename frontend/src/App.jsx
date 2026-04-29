@@ -4,6 +4,8 @@ import Home from './pages/Home';
 import MarketDetail from './pages/MarketDetail';
 import MyBets from './pages/MyBets';
 import CreateMarket from './pages/CreateMarket';
+import Admin from './pages/Admin';
+import Swap from './pages/Swap';
 import { useStellar } from './hooks/useStellar';
 import { Toaster } from 'sonner';
 
@@ -11,7 +13,13 @@ function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [selectedMarketId, setSelectedMarketId] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const { account, network, tokenBalance, connectWallet, refreshBalance, mintTokens, submitSorobanTx, fundAccount, seedMarkets, issueClassicToken, connecting } = useStellar();
+  const { account, network, tokenBalance, connectWallet, refreshBalance, mintTokens, submitSorobanTx, fundAccount, seedMarkets, issueClassicToken, swapXlmToMtk, swapMtkToXlm, adminMint, connecting } = useStellar();
+
+  React.useEffect(() => {
+    if (window.location.pathname === '/admin') {
+      setCurrentPage('admin');
+    }
+  }, []);
 
   const handleMarketClick = (id) => {
     setSelectedMarketId(id);
@@ -54,6 +62,18 @@ function App() {
           triggerRefresh();
           setCurrentPage('home');
         }} />;
+      case 'swap':
+        return (
+          <Swap 
+            account={account} 
+            tokenBalance={tokenBalance} 
+            refreshBalance={refreshBalance}
+            swapXlmToMtk={swapXlmToMtk}
+            swapMtkToXlm={swapMtkToXlm}
+          />
+        );
+      case 'admin':
+        return <Admin account={account} adminMint={adminMint} />;
       default:
         return <Home account={account} mintTokens={mintTokens} onMarketClick={handleMarketClick} refreshBalance={refreshBalance} />;
     }
