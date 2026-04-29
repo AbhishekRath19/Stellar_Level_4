@@ -2,7 +2,7 @@
 
 Predix is a high-performance decentralized prediction market platform built on **Stellar Soroban**, featuring advanced inter-contract calls, real-time event streaming, and a premium mobile-first experience.
 
-[![CI/CD Pipeline](https://github.com/your-username/stellar-level-4/actions/workflows/main.yml/badge.svg)](https://github.com/your-username/stellar-level-4/actions)
+[![CI/CD Pipeline](https://github.com/AbhishekRath19/Stellar_Level_4/actions/workflows/deploy.yml/badge.svg)](https://github.com/AbhishekRath19/Stellar_Level_4/actions)
 
 ---
 
@@ -11,8 +11,8 @@ This submission demonstrates advanced Soroban patterns required for Level 4 cert
 - **Inter-Contract Calls**: The `PredictionMarket` contract performs atomic transfers by calling the `MarketToken` contract.
 - **Custom Token**: Implemented a mintable MTK token following the Soroban token interface.
 - **Event Streaming**: The frontend listens to contract events (`m_create`, `bet`, `resolve`) for real-time UI updates.
-- **CI/CD**: Automated testing and build verification via GitHub Actions.
-- **Mobile Responsive**: Custom CSS/Tailwind design optimized for all screen sizes.
+- **CI/CD**: Automated testing and build verification via GitHub Actions (see `.github/workflows/deploy.yml`).
+- **Mobile Responsive**: Custom CSS/Tailwind design optimized for all screen sizes, including a mobile bottom-sheet for betting.
 
 ---
 
@@ -26,10 +26,10 @@ This submission demonstrates advanced Soroban patterns required for Level 4 cert
 ---
 
 ## ✨ Features
-- **Mint MTK**: Easily acquire betting tokens on the Testnet using the integrated Mint function.
+- **Mint MTK**: Acquire betting tokens on the Testnet using the integrated "Mint MTK" section.
 - **Live Feed**: Markets update instantly as bets are placed, driven by ledger events.
-- **Freighter Integration**: Secure, non-custodial transaction signing.
-- **Mobile First**: Premium glassmorphism UI designed for high-end mobile devices.
+- **Freighter Integration**: Secure, robust transaction signing with enhanced XDR handling.
+- **Mobile First**: Premium glassmorphism UI designed for high-end mobile devices with full responsive support.
 
 ---
 
@@ -55,15 +55,13 @@ This submission demonstrates advanced Soroban patterns required for Level 4 cert
 ### Prerequisites
 - [Stellar CLI](https://developers.stellar.org/docs/tools/developer-shell)
 - Rust & Wasm target
-- Node.js v18+
+- Node.js v20+
 
 ### Contract Build
 ```bash
 # Build both contracts
-make build
-
-# Run contract tests
-make test
+cd contracts_soroban
+cargo build --target wasm32-unknown-unknown --release
 ```
 
 ### Frontend Setup
@@ -78,13 +76,13 @@ npm run dev
 ## 🔒 Security
 - **Escrow Mechanics**: All bets are held in the `PredictionMarket` contract address.
 - **Authorization**: The `MarketToken` implements `require_auth` to prevent unauthorized transfers.
-- **Testnet Only**: This implementation is for demonstration and should be audited before mainnet use.
+- **Robust XDR Submission**: Enhanced frontend logic to handle signed transaction extraction and Base64 encoding across different browser environments.
 
 ---
 
 ## 📸 Mobile Responsive Preview
 ![Mobile View](screenshots/mobile_view.png)
-*(Optimized for iOS/Android high-density displays)*
+*(Optimized for iOS/Android high-density displays with reactive layout shifts)*
 
 ---
 
@@ -95,4 +93,4 @@ The `PredictionMarket` contract acts as a vault and logic controller:
 
 ---
 
-*Built for the Stellar Soroban Level 4 Challenge.*
+*Built for the Stellar Soroban Level 4 Challenge by AbhishekRath19.*

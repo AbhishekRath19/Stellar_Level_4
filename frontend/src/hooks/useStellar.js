@@ -113,7 +113,7 @@ export const useStellar = () => {
   const mintTokens = async (amount) => {
     if (!account) return;
     const contract = new StellarSdk.Contract(CONTRACT_IDS.TOKEN);
-    const amountRaw = BigInt(amount * 1e7); // Assuming 7 decimals
+    const amountRaw = BigInt(Math.floor(parseFloat(amount) * 1e7));
     
     const op = contract.call('mint', 
       StellarSdk.nativeToScVal(account, { type: 'address' }),
@@ -163,28 +163,42 @@ export const useStellar = () => {
       // 4. Submit to Network (Direct RPC to bypass SDK crashes)
       // Robustly extract and clean the XDR string
       let finalXdr = signedXdrResponse;
-      if (typeof signedXdrResponse === 'object') {
+      if (typeof signedXdrResponse === 'object' && signedXdrResponse !== null) {
         // Freighter can return { xdr: "..." } or { signedTransaction: "..." }
         finalXdr = signedXdrResponse.xdr || signedXdrResponse.signedTransaction || signedXdrResponse;
       }
       
       // Professional-grade Base64 conversion if it's binary
-      if (typeof finalXdr !== 'string') {
+      if (typeof finalXdr !== 'string' && finalXdr !== null) {
         try {
-          const bytes = new Uint8Array(finalXdr);
-          finalXdr = StellarSdk.base64.encode(Buffer.from(bytes));
+          // Use Buffer if available, otherwise fallback to native methods
+          if (typeof Buffer !== 'undefined') {
+            finalXdr = Buffer.from(finalXdr).toString('base64');
+          } else {
+            const bytes = new Uint8Array(finalXdr);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            finalXdr = btoa(binary);
+          }
         } catch (e) {
           console.error("Binary to Base64 conversion failed:", e);
         }
       }
       
-      finalXdr = finalXdr.toString().trim().replace(/[\r\n]/g, '');
+      if (typeof finalXdr !== 'string') {
+        console.error("Final XDR is not a string:", finalXdr);
+        throw new Error(`The signed XDR is invalid: ${typeof finalXdr}`);
+      }
+
+      finalXdr = finalXdr.trim().replace(/[\r\n]/g, '');
 
       // Verify XDR is valid before sending
       try {
         StellarSdk.TransactionBuilder.fromXDR(finalXdr, NETWORK_PASSPHRASE);
       } catch (e) {
-        console.error("The signed XDR is invalid:", finalXdr);
+        console.error("The signed XDR is invalid or unrecognized:", finalXdr);
         throw new Error("Invalid XDR generated after signing: " + e.message);
       }
 

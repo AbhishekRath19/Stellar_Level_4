@@ -140,7 +140,11 @@ const Home = ({ account, mintTokens, fundAccount, seedMarkets, onMarketClick, on
 
   const handleBuyTokens = async (e) => {
     e.preventDefault();
-    if (!buyAmount || isNaN(buyAmount)) return;
+    const amount = parseFloat(buyAmount);
+    if (!buyAmount || isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid amount greater than 0");
+      return;
+    }
     setBuyLoading(true);
     
     try {
