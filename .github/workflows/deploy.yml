@@ -9,10 +9,15 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -20,19 +25,15 @@ jobs:
         node-version: '20'
     
     - name: Install dependencies
-      working-directory: ./frontend
-      run: npm install
+      run: npm install --no-audit --no-fund
     
     - name: Run linter (Non-blocking)
-      working-directory: ./frontend
       run: npm run lint --if-present || true
     
     - name: Run tests (Non-blocking)
-      working-directory: ./frontend
       run: npm test --if-present || true
     
     - name: Build project
-      working-directory: ./frontend
       run: npm run build || true
     
     - name: Upload build artifacts
