@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowDownUp, Zap, Loader2, Coins, ArrowRight } from 'lucide-react';
+import { ArrowDownUp, Zap, Loader2, Coins, ArrowRight, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Swap = ({ swapXlmToMtk, swapMtkToXlm, account, refreshBalance, tokenBalance }) => {
