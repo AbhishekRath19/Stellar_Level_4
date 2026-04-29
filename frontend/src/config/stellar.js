@@ -12,7 +12,8 @@ export const MARKET_CONTRACT_ID = 'CDUZWM4LXMHNEWF45XBM5DBQDKBRKGT5SO6NXF7HSYUID
 export const TOKEN_CONTRACT_ID = 'CCJBOURAHBBDFHYNVYOAKPC2T3Z5QDBEMBXG4ENNUTENGMZVI2TOYSKJ';
 
 // Initialize Soroban server
-export const server = new StellarSdk.SorobanRpc.Server(SOROBAN_RPC_URL);
+// Using rpc.Server which is standard for version 12.3.0
+export const server = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
 
 // Initialize Horizon server (for classic operations)
 export const horizonServer = new StellarSdk.Horizon.Server(HORIZON_URL);
