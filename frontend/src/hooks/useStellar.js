@@ -108,14 +108,28 @@ export const useStellar = () => {
         networkPassphrase: NETWORK_PASSPHRASE,
       });
 
-      // 3. Extract XDR string from response (Freighter can return string or object)
-      let signedXdrString = typeof signedResponse === 'object' 
-        ? signedResponse.signedTransaction || signedResponse.xdr 
-        : signedResponse;
+      // 3. Extract XDR string from response
+      let signedXdrString = '';
+      
+      if (typeof signedResponse === 'string') {
+        signedXdrString = signedResponse;
+      } else if (signedResponse && typeof signedResponse === 'object') {
+        // Check for all common property names used by various versions of Freighter/SDKs
+        signedXdrString = signedResponse.signedTransaction || 
+                          signedResponse.xdr || 
+                          signedResponse.signedTx || 
+                          signedResponse.transaction ||
+                          '';
+        
+        // If we still don't have it, but the object itself has a toXDR or toString that looks like XDR
+        if (!signedXdrString && typeof signedResponse.toXDR === 'function') {
+          signedXdrString = signedResponse.toXDR();
+        }
+      }
 
-      if (typeof signedXdrString !== 'string') {
-        console.error("❌ Signed XDR is not a string:", signedResponse);
-        throw new Error(`Expected signed XDR string, got ${typeof signedXdrString}`);
+      if (!signedXdrString || typeof signedXdrString !== 'string') {
+        console.error("❌ Signed response is invalid:", signedResponse);
+        throw new Error(`Expected signed XDR string, but could not extract it from response.`);
       }
 
       console.log("✅ Transaction signed successfully");
