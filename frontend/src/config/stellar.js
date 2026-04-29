@@ -7,8 +7,9 @@ export const HORIZON_URL = 'https://horizon-testnet.stellar.org';
 export const SOROBAN_RPC_URL = 'https://soroban-testnet.stellar.org';
 
 // Contract addresses - Unified for Level 4 Submission
-export const MARKET_CONTRACT_ID = 'CDUZWM4LXMHNEWF45XBM5DBQDKBRKGT5SO6NXF7HSYUIDAWV37YQVOPS';
-export const TOKEN_CONTRACT_ID = 'CCJBOURAHBBDFHYNVYOAKPC2T3Z5QDBEMBXG4ENNUTENGMZVI2TOYSKJ';
+// Contract addresses - Unified for Level 4 Submission
+export const MARKET_CONTRACT_ID = import.meta.env.VITE_MARKET_CONTRACT_ADDRESS || 'CDUZWM4LXMHNEWF45XBM5DBQDKBRKGT5SO6NXF7HSYUIDAWV37YQVOPS';
+export const TOKEN_CONTRACT_ID = import.meta.env.VITE_TOKEN_CONTRACT_ADDRESS || 'CCJBOURAHBBDFHYNVYOAKPC2T3Z5QDBEMBXG4ENNUTENGMZVI2TOYSKJ';
 export const POOL_CONTRACT_ID = 'CBB77X734M3M23M3M3M3M3M3M3M3M3M3M3M3M3M3M3M3M3M3M3M3'; // Placeholder for Inter-contract requirement
 
 // Initialize Soroban server
