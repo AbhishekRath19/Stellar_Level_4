@@ -38,6 +38,7 @@ function App() {
             fundAccount={fundAccount}
             seedMarkets={seedMarkets}
             issueClassicToken={issueClassicToken}
+            submitSorobanTx={submitSorobanTx}
             onMarketClick={handleMarketClick} 
             onNavigate={setCurrentPage}
             refreshBalance={refreshBalance} 
