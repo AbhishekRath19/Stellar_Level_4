@@ -1,61 +1,69 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { ethers } from 'ethers';
+import * as StellarSdk from '@stellar/stellar-sdk';
 
-export const useEvents = (contracts, account, onMarketUpdate, refreshBalance) => {
+const RPC_URL = 'https://soroban-testnet.stellar.org';
+
+export const useEvents = (account, refreshBalance) => {
+  const server = new StellarSdk.rpc.Server(RPC_URL);
+  const lastLedgerRef = useRef(0);
+
   useEffect(() => {
-    if (!contracts.market || !contracts.token) return;
+    if (!account) return;
 
-    const handleBetPlaced = (marketId, user, optionIndex, amount) => {
-      console.log(`Event: BetPlaced - Market ${marketId}, User ${user}, Option ${optionIndex}, Amount ${amount}`);
-      
-      // Notify user if it's their bet
-      if (account && user.toLowerCase() === account.toLowerCase()) {
-        toast.success(`Bet of ${ethers.formatEther(amount)} MTK placed!`, {
-          description: `Market #${marketId.toString()}`,
+    const pollEvents = async () => {
+      try {
+        // Get current ledger
+        const latestLedgerResponse = await server.getLatestLedger();
+        const latestLedger = latestLedgerResponse.sequence;
+        
+        if (lastLedgerRef.current === 0) {
+          lastLedgerRef.current = latestLedger - 10; // Start from a few ledgers back
+        }
+
+        if (latestLedger <= lastLedgerRef.current) return;
+
+        const events = await server.getEvents({
+          startLedger: lastLedgerRef.current + 1,
+          filters: [
+            {
+              type: 'contract',
+              // Add filters if needed, or just poll all and filter manually
+            },
+          ],
         });
-      } else {
-        toast.info(`New bet on Market #${marketId.toString()}`, {
-          description: `${ethers.formatEther(amount)} MTK placed`,
-        });
+
+        for (const event of events.events) {
+          // Parse events here based on contract topics
+          // Example: topic[0] == symbol_short!("bet")
+          const topics = event.topic;
+          if (topics && topics.length > 0) {
+            const topicName = StellarSdk.scValToNative(topics[0]);
+            
+            if (topicName === 'bet') {
+              const marketId = StellarSdk.scValToNative(topics[1]);
+              const data = StellarSdk.scValToNative(event.value);
+              // data = [user, option, amount]
+              if (account && data[0].toString() === account) {
+                toast.success(`Bet placed on Market #${marketId}!`, {
+                  description: `${Number(data[2]) / 1e7} MTK`,
+                });
+                if (refreshBalance) refreshBalance();
+              }
+            } else if (topicName === 'resolve') {
+              const marketId = StellarSdk.scValToNative(topics[1]);
+              toast.info(`Market #${marketId} has been resolved!`);
+            }
+          }
+        }
+
+        lastLedgerRef.current = latestLedger;
+      } catch (e) {
+        console.error("Event polling failed", e);
       }
-
-      // Trigger UI update
-      if (onMarketUpdate) onMarketUpdate(Number(marketId));
     };
 
-    const handleMarketResolved = (marketId, winningOption) => {
-      console.log(`Event: MarketResolved - Market ${marketId}, Winner ${winningOption}`);
-      
-      toast.success(`Market #${marketId.toString()} Resolved!`, {
-        description: `Winner: Option Index ${winningOption.toString()}`,
-        duration: 10000,
-      });
-
-      if (onMarketUpdate) onMarketUpdate(Number(marketId));
-    };
-
-    const handleWinningsClaimed = (marketId, user, amount) => {
-      console.log(`Event: WinningsClaimed - Market ${marketId}, User ${user}, Amount ${amount}`);
-      
-      if (account && user.toLowerCase() === account.toLowerCase()) {
-        toast.success(`Winnings Claimed!`, {
-          description: `You received ${ethers.formatEther(amount)} MTK`,
-        });
-        if (refreshBalance) refreshBalance();
-      }
-    };
-
-    // Subscribing to events
-    contracts.market.on("BetPlaced", handleBetPlaced);
-    contracts.market.on("MarketResolved", handleMarketResolved);
-    contracts.market.on("WinningsClaimed", handleWinningsClaimed);
-
-    return () => {
-      // Unsubscribing on unmount
-      contracts.market.off("BetPlaced", handleBetPlaced);
-      contracts.market.off("MarketResolved", handleMarketResolved);
-      contracts.market.off("WinningsClaimed", handleWinningsClaimed);
-    };
-  }, [contracts.market, contracts.token, account, onMarketUpdate, refreshBalance]);
+    const interval = setInterval(pollEvents, 5000);
+    return () => clearInterval(interval);
+  }, [account, refreshBalance]);
 };

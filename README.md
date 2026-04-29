@@ -20,8 +20,8 @@ This submission demonstrates advanced Soroban patterns required for Level 4 cert
 
 | Contract | Soroban ID | Features |
 | :--- | :--- | :--- |
-| **MarketToken (MTK)** | `CDBUI...` | Custom Mintable, SEP-41 Interface |
-| **PredictionMarket** | `CCBUI...` | Inter-contract Calls, Event Emission |
+| **MarketToken (MTK)** | `CCJBOURAHBBDFHYNVYOAKPC2T3Z5QDBEMBXG4ENNUTENGMZVI2TOYSKJ` | Custom Mintable, SEP-41 Interface |
+| **PredictionMarket** | `CDUZWM4LXMHNEWF45XBM5DBQDKBRKGT5SO6NXF7HSYUIDAWV37YQVOPS` | Inter-contract Calls, Event Emission |
 
 ---
 

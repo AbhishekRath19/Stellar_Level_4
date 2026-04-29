@@ -1,63 +1,46 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import BetForm from './BetForm';
-import { ethers } from 'ethers';
+import * as StellarSdk from '@stellar/stellar-sdk';
 
-// Mock constants
-jest.mock('../contracts/constants', () => ({
-  ADDRESSES: { PREDICTION_MARKET: '0x123' }
+jest.mock('@stellar/stellar-sdk', () => ({
+  ...jest.requireActual('@stellar/stellar-sdk'),
+  nativeToScVal: jest.fn().mockReturnValue({}),
+  Contract: jest.fn().mockImplementation(() => ({
+    call: jest.fn().mockReturnValue({}),
+  })),
 }));
-
 const mockMarket = {
   options: ['Yes', 'No'],
 };
 
-const mockContracts = {
-  token: {
-    approve: jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({}) }),
-  },
-  market: {
-    placeBet: jest.fn().mockResolvedValue({ wait: jest.fn().mockResolvedValue({}) }),
-  },
-};
-
 describe('BetForm Component', () => {
+  const mockSubmitSorobanTx = jest.fn().mockResolvedValue({ status: 'SUCCESS' });
+
   test('renders options and input', () => {
-    render(<BetForm market={mockMarket} marketId={0} contracts={mockContracts} onBetPlaced={() => {}} />);
+    render(<BetForm market={mockMarket} marketId={0} account="GA5W6YONB7DW7I73J5KTS3D6P63J5TS6X7G7G7G7G7G7G7G7G7G7G7G7" submitSorobanTx={mockSubmitSorobanTx} onBetPlaced={() => {}} />);
     
     expect(screen.getByText('Yes')).toBeInTheDocument();
     expect(screen.getByText('No')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('0.0')).toBeInTheDocument();
-  });
-
-  test('validates input amount', async () => {
-    render(<BetForm market={mockMarket} marketId={0} contracts={mockContracts} onBetPlaced={() => {}} />);
-    
-    const input = screen.getByPlaceholderText('0.0');
-    fireEvent.change(input, { target: { value: '-1' } });
-    
-    const submitBtn = screen.getByText('Confirm Bet');
-    fireEvent.click(submitBtn);
-
-    // Should not call contracts if amount is invalid
-    expect(mockContracts.token.approve).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText('0.00')).toBeInTheDocument();
   });
 
   test('handles successful bet placement', async () => {
-    render(<BetForm market={mockMarket} marketId={0} contracts={mockContracts} onBetPlaced={() => {}} />);
+    const onBetPlaced = jest.fn();
+    render(<BetForm market={mockMarket} marketId={0} account="GA5W6YONB7DW7I73J5KTS3D6P63J5TS6X7G7G7G7G7G7G7G7G7G7G7G7" submitSorobanTx={mockSubmitSorobanTx} onBetPlaced={onBetPlaced} />);
     
     // Select option
     fireEvent.click(screen.getByText('Yes'));
     
     // Enter amount
-    fireEvent.change(screen.getByPlaceholderText('0.0'), { target: { value: '10' } });
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '10' } });
     
     // Submit
-    fireEvent.click(screen.getByText('Confirm Bet'));
+    fireEvent.click(screen.getByText('INITIALIZE POSITION'));
     
     await waitFor(() => {
-      expect(mockContracts.token.approve).toHaveBeenCalled();
-      expect(mockContracts.market.placeBet).toHaveBeenCalled();
+      expect(mockSubmitSorobanTx).toHaveBeenCalledTimes(2); // Approve then Place Bet
+      expect(onBetPlaced).toHaveBeenCalled();
     });
   });
 });

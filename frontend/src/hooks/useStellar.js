@@ -7,8 +7,32 @@ const RPC_URL = 'https://soroban-testnet.stellar.org';
 
 // Constants for deployed contracts
 export const CONTRACT_IDS = {
-  MARKET: 'CCBUIXG5G5F6F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5', // Replace after deployment
-  TOKEN: 'CDBUIXG5G5F6F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5'  // Replace after deployment
+  MARKET: 'CDUZWM4LXMHNEWF45XBM5DBQDKBRKGT5SO6NXF7HSYUIDAWV37YQVOPS',
+  TOKEN: 'CCJBOURAHBBDFHYNVYOAKPC2T3Z5QDBEMBXG4ENNUTENGMZVI2TOYSKJ'
+};
+
+// Helper to safely convert ScVal to Native, handling both objects and XDR strings
+const safeScValToNative = (scVal) => {
+  if (scVal === null || scVal === undefined) return null;
+  try {
+    // If it's a string, it's likely Base64 XDR
+    if (typeof scVal === 'string') {
+      try {
+        const parsed = StellarSdk.xdr.ScVal.fromXDR(scVal, 'base64');
+        return StellarSdk.scValToNative(parsed);
+      } catch (e) {
+        return scVal; // Return as-is if parsing fails
+      }
+    }
+    // If it's an object, check for the switch method required by scValToNative
+    if (scVal && typeof scVal === 'object' && typeof scVal.switch === 'function') {
+      return StellarSdk.scValToNative(scVal);
+    }
+    return scVal;
+  } catch (e) {
+    console.warn("Safe conversion fallback:", e);
+    return scVal;
+  }
 };
 
 export const useStellar = () => {
@@ -16,7 +40,7 @@ export const useStellar = () => {
   const [network, setNetwork] = useState(null);
   const [tokenBalance, setTokenBalance] = useState('0');
   const [connecting, setConnecting] = useState(false);
-  const [server] = useState(new StellarSdk.SorobanRpc.Server(RPC_URL));
+  const [server] = useState(new StellarSdk.rpc.Server(RPC_URL));
 
   const connectWallet = useCallback(async () => {
     if (connecting) return;
@@ -48,22 +72,24 @@ export const useStellar = () => {
   }, [connecting]);
 
   const refreshBalance = useCallback(async (address) => {
-    if (!address) return;
+    const targetAddress = address || account;
+    if (!targetAddress) return;
     try {
       const contract = new StellarSdk.Contract(CONTRACT_IDS.TOKEN);
-      const tx = await server.getLedgerEntries(contract.getFootprint());
+      // Simulate balance call to get current state
+
       // For simplicity, we'll implement a real call here using simulateTransaction
       const op = contract.call('balance', StellarSdk.nativeToScVal(address, { type: 'address' }));
       const result = await server.simulateTransaction(
         new StellarSdk.TransactionBuilder(
           new StellarSdk.Account(address, '0'),
           { fee: '100', networkPassphrase: NETWORK_PASSPHRASE }
-        ).addOperation(op).build()
+        ).addOperation(op).setTimeout(StellarSdk.TimeoutInfinite).build()
       );
       
-      if (result.result) {
-        const balance = StellarSdk.scValToNative(result.result.retval);
-        setTokenBalance(StellarSdk.formatAmount(balance, 7)); // Soroban tokens often use 7 decimals
+      if (result.result && result.result.retval) {
+        const balance = safeScValToNative(result.result.retval);
+        setTokenBalance((Number(balance) / 10000000).toString());
       }
     } catch (e) {
       console.error("Balance refresh failed", e);
@@ -98,42 +124,172 @@ export const useStellar = () => {
   };
 
   const submitSorobanTx = async (operation) => {
-    const accountInfo = await server.getAccount(account);
-    let tx = new StellarSdk.TransactionBuilder(accountInfo, {
-      fee: StellarSdk.BASE_FEE,
-      networkPassphrase: NETWORK_PASSPHRASE,
-    })
-    .addOperation(operation)
-    .setTimeout(30)
-    .build();
+    if (!account) throw new Error("Wallet not connected");
+    
+    try {
+      // 1. Build initial skeleton transaction
+      const accountInfo = await server.getAccount(account);
+      const tx = new StellarSdk.TransactionBuilder(accountInfo, {
+        fee: "1000", // Initial fee for preparation
+        networkPassphrase: NETWORK_PASSPHRASE,
+      })
+      .addOperation(operation)
+      .setTimeout(StellarSdk.TimeoutInfinite)
+      .build();
 
-    // 1. Simulate
-    const simulation = await server.simulateTransaction(tx);
-    tx = server.assembleTransaction(tx, simulation);
+      // 2. Prepare Transaction (Calculates real fees and footprint)
+      let preparedTx;
+      try {
+        preparedTx = await server.prepareTransaction(tx);
+      } catch (simError) {
+        console.error("Preparation failed:", simError);
+        throw new Error(`Transaction Preparation Failed: ${simError.message || "Unknown Error"}`);
+      }
 
-    // 2. Sign with Freighter
-    const signedXdr = await signTransaction(tx.toXDR(), { network: 'TESTNET' });
-    const signedTx = StellarSdk.TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
+      // 3. Sign with Wallet
+      const unsignedXdr = preparedTx.toXDR('base64');
+      let signedXdrResponse;
+      try {
+        signedXdrResponse = await signTransaction(unsignedXdr, {
+          network: 'TESTNET',
+          networkPassphrase: NETWORK_PASSPHRASE,
+        });
+      } catch (signErr) {
+        throw new Error("Signing rejected: " + signErr.message);
+      }
 
-    // 3. Send
-    const response = await server.sendTransaction(signedTx);
-    if (response.status !== 'PENDING') throw new Error("Transaction failed");
+      if (!signedXdrResponse) throw new Error("Wallet returned no signature");
 
-    // 4. Poll for result
-    let result = await server.getTransaction(response.hash);
-    while (result.status === 'NOT_FOUND' || result.status === 'PENDING') {
-      await new Promise(r => setTimeout(r, 1000));
-      result = await server.getTransaction(response.hash);
+      // 4. Submit to Network (Direct RPC to bypass SDK crashes)
+      // Robustly extract and clean the XDR string
+      let finalXdr = signedXdrResponse;
+      if (typeof signedXdrResponse === 'object') {
+        // Freighter can return { xdr: "..." } or { signedTransaction: "..." }
+        finalXdr = signedXdrResponse.xdr || signedXdrResponse.signedTransaction || signedXdrResponse;
+      }
+      
+      // Professional-grade Base64 conversion if it's binary
+      if (typeof finalXdr !== 'string') {
+        try {
+          const bytes = new Uint8Array(finalXdr);
+          finalXdr = StellarSdk.base64.encode(Buffer.from(bytes));
+        } catch (e) {
+          console.error("Binary to Base64 conversion failed:", e);
+        }
+      }
+      
+      finalXdr = finalXdr.toString().trim().replace(/[\r\n]/g, '');
+
+      // Verify XDR is valid before sending
+      try {
+        StellarSdk.TransactionBuilder.fromXDR(finalXdr, NETWORK_PASSPHRASE);
+      } catch (e) {
+        console.error("The signed XDR is invalid:", finalXdr);
+        throw new Error("Invalid XDR generated after signing: " + e.message);
+      }
+
+      const rpcResponse = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'sendTransaction',
+          params: { transaction: finalXdr }
+        })
+      });
+      
+      const rpcData = await rpcResponse.json();
+      if (rpcData.error) {
+        console.error("RPC Send Error:", rpcData.error);
+        throw new Error(`RPC Error: ${rpcData.error.message} (Data: ${JSON.stringify(rpcData.error.data)})`);
+      }
+      
+      const response = rpcData.result;
+      if (response.status === 'ERROR') {
+        console.error("TX Logic Error:", response);
+        throw new Error(`TX Rejected: ${response.errorResultXdr || "Check console for details"}`);
+      }
+
+      // 5. Poll for Confirmation
+      let result;
+      while (true) {
+        const pollResponse = await fetch(RPC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: Date.now() + 1,
+            method: 'getTransaction',
+            params: { hash: response.hash }
+          })
+        });
+        
+        const pollData = await pollResponse.json();
+        result = pollData.result;
+        
+        if (result && result.status !== 'NOT_FOUND' && result.status !== 'PENDING') break;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+
+      if (result.status === 'SUCCESS') {
+        console.log("Success!", response.hash);
+        refreshBalance(account);
+        return result;
+      } else {
+        throw new Error(`On-Chain Error: ${result.status}`);
+      }
+    } catch (error) {
+      console.error("Soroban Error:", error);
+      alert(error.message || "Transaction failed");
+      throw error;
     }
+  };
 
-    if (result.status === 'SUCCESS') {
-      console.log("Transaction confirmed on-chain:", response.hash);
-      refreshBalance(account);
-      return result;
-    } else {
-      console.error("Transaction failed on-chain:", result);
-      throw new Error("Transaction failed on chain");
+  const fundAccount = async () => {
+    if (!account) return;
+    try {
+      await fetch(`https://friendbot.stellar.org?addr=${account}`);
+      await refreshBalance(account);
+      alert("Account funded via Friendbot!");
+    } catch (e) {
+      console.error(e);
+      alert("Friendbot failed. Please fund manually.");
     }
+  };
+
+  const seedMarkets = async () => {
+    if (!account) return;
+    const marketsToSeed = [
+      {
+        question: "Will Stellar (XLM) flip Ripple (XRP) in Market Cap by EOY 2026?",
+        options: ["Yes", "No", "Equal"],
+        closeTime: Math.floor(Date.now() / 1000) + 86400 * 30 // 30 days
+      },
+      {
+        question: "Will Soroban handle over 1M transactions per day by July 2026?",
+        options: ["Yes", "No"],
+        closeTime: Math.floor(Date.now() / 1000) + 86400 * 15 // 15 days
+      },
+      {
+        question: "Which DeFi protocol will dominate Stellar in 2026?",
+        options: ["Predix", "Soroswap", "LumenSwap", "Other"],
+        closeTime: Math.floor(Date.now() / 1000) + 86400 * 60 // 60 days
+      }
+    ];
+
+    const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+    
+    for (const m of marketsToSeed) {
+      const op = marketContract.call('create_market',
+        StellarSdk.nativeToScVal(account, { type: 'address' }),
+        StellarSdk.nativeToScVal(m.question, { type: 'string' }),
+        StellarSdk.nativeToScVal(m.options), // Simplified: nativeToScVal handles arrays of primitives automatically
+        StellarSdk.nativeToScVal(m.closeTime, { type: 'u64' })
+      );
+      await submitSorobanTx(op);
+    }
+    alert("Markets seeded successfully!");
   };
 
   return { 
@@ -144,6 +300,8 @@ export const useStellar = () => {
     refreshBalance: () => refreshBalance(account), 
     mintTokens,
     submitSorobanTx,
+    fundAccount,
+    seedMarkets,
     connecting 
   };
 };

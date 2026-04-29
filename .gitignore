@@ -9,3 +9,4 @@ cache/
 .stellar/
 .soroban/
 node_modules
+rustup-init.exe

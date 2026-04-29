@@ -11,7 +11,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [selectedMarketId, setSelectedMarketId] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const { account, network, tokenBalance, connectWallet, refreshBalance, mintTokens, submitSorobanTx, connecting } = useStellar();
+  const { account, network, tokenBalance, connectWallet, refreshBalance, mintTokens, submitSorobanTx, fundAccount, seedMarkets, connecting } = useStellar();
 
   const handleMarketClick = (id) => {
     setSelectedMarketId(id);
@@ -27,7 +27,10 @@ function App() {
           <Home 
             account={account}
             mintTokens={mintTokens}
+            fundAccount={fundAccount}
+            seedMarkets={seedMarkets}
             onMarketClick={handleMarketClick} 
+            onNavigate={setCurrentPage}
             refreshBalance={refreshBalance} 
             refreshTrigger={refreshTrigger}
           />
@@ -44,9 +47,9 @@ function App() {
           />
         );
       case 'my-bets':
-        return <MyBets account={account} refreshBalance={refreshBalance} />;
+        return <MyBets account={account} submitSorobanTx={submitSorobanTx} refreshBalance={refreshBalance} />;
       case 'create':
-        return <CreateMarket submitSorobanTx={submitSorobanTx} onBack={() => {
+        return <CreateMarket account={account} submitSorobanTx={submitSorobanTx} onBack={() => {
           triggerRefresh();
           setCurrentPage('home');
         }} />;
@@ -64,6 +67,7 @@ function App() {
         onNavigate={setCurrentPage}
         network={network}
         connecting={connecting}
+        isOwner={!!account}
       />
 
       <main className="pt-32 pb-20 px-4 md:px-8 max-w-7xl mx-auto">

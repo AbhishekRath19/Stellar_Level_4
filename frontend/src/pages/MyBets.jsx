@@ -5,10 +5,23 @@ import { CONTRACT_IDS } from '../hooks/useStellar';
 
 const RPC_URL = 'https://soroban-testnet.stellar.org';
 
-const MyBets = ({ account, refreshBalance }) => {
+const safeScValToNative = (scVal) => {
+  if (scVal === null || scVal === undefined) return null;
+  try {
+    if (typeof scVal === 'string') {
+      return StellarSdk.scValToNative(StellarSdk.xdr.ScVal.fromXDR(scVal, 'base64'));
+    }
+    if (typeof scVal.switch !== 'function') return scVal;
+    return StellarSdk.scValToNative(scVal);
+  } catch (e) {
+    return scVal;
+  }
+};
+
+const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [server] = useState(new StellarSdk.SorobanRpc.Server(RPC_URL));
+  const [server] = useState(new StellarSdk.rpc.Server(RPC_URL));
 
   const fetchMyBets = async () => {
     if (!account) return;
@@ -22,11 +35,11 @@ const MyBets = ({ account, refreshBalance }) => {
         new StellarSdk.TransactionBuilder(
           new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
           { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
-        ).addOperation(countOp).build()
+        ).addOperation(countOp).setTimeout(StellarSdk.TimeoutInfinite).build()
       );
 
-      if (countResult.result) {
-        const count = StellarSdk.scValToNative(countResult.result.retval);
+      if (countResult.result && countResult.result.retval) {
+        const count = safeScValToNative(countResult.result.retval);
         const userBetsArr = [];
         const userAddress = StellarSdk.Address.fromString(account);
 
@@ -37,11 +50,11 @@ const MyBets = ({ account, refreshBalance }) => {
             new StellarSdk.TransactionBuilder(
               new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
               { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
-            ).addOperation(mOp).build()
+            ).addOperation(mOp).setTimeout(StellarSdk.TimeoutInfinite).build()
           );
           
-          if (mResult.result) {
-            const data = StellarSdk.scValToNative(mResult.result.retval);
+          if (mResult.result && mResult.result.retval) {
+            const data = safeScValToNative(mResult.result.retval);
             const positions = [];
             let totalOnMarket = 0;
 
@@ -56,11 +69,11 @@ const MyBets = ({ account, refreshBalance }) => {
                 new StellarSdk.TransactionBuilder(
                   new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
                   { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
-                ).addOperation(betOp).build()
+                ).addOperation(betOp).setTimeout(StellarSdk.TimeoutInfinite).build()
               );
 
-              if (betResult.result) {
-                const amount = StellarSdk.scValToNative(betResult.result.retval);
+              if (betResult.result && betResult.result.retval) {
+                const amount = safeScValToNative(betResult.result.retval);
                 if (amount > 0) {
                   positions.push({ 
                     option: data.options[j].toString(), 
@@ -98,8 +111,19 @@ const MyBets = ({ account, refreshBalance }) => {
   }, [account]);
 
   const handleClaim = async (marketId) => {
-    // Logic for claiming winnings would go here if implemented in contract
-    alert("Claim functionality is handled automatically or requires separate contract call. Not implemented in current mockup.");
+    try {
+      const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+      const claimOp = marketContract.call('claim_winnings',
+        StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }),
+        StellarSdk.nativeToScVal(account, { type: 'address' })
+      );
+      await submitSorobanTx(claimOp);
+      fetchMyBets();
+      refreshBalance();
+    } catch (e) {
+      console.error(e);
+      alert("Claim failed: " + e.message);
+    }
   };
 
   if (!account) return (
@@ -154,11 +178,21 @@ const MyBets = ({ account, refreshBalance }) => {
                   <p className="text-lg sm:text-xl font-black text-white">{bet.total} MTK</p>
                 </div>
                 
-                <div className="flex items-center">
+                <div className="flex items-center space-x-3">
                   {bet.resolved ? (
-                    <span className="px-6 py-3 rounded-2xl bg-green-500/10 text-green-500 font-black text-xs uppercase tracking-widest border border-green-500/20">
-                      Resolved
-                    </span>
+                    <>
+                      <span className="px-4 py-2 rounded-xl bg-green-500/10 text-green-500 font-black text-[10px] uppercase tracking-widest border border-green-500/20">
+                        Resolved
+                      </span>
+                      {bet.positions.some(p => p.optionIndex === bet.winningOption) && (
+                        <button
+                          onClick={() => handleClaim(bet.id)}
+                          className="px-6 py-3 rounded-xl bg-brand-primary text-white font-black text-[10px] uppercase tracking-widest hover:bg-brand-primary/80 transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)]"
+                        >
+                          Claim Winnings
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <div className="flex items-center space-x-2 text-brand-accent">
                       <TrendingUp size={18} className="animate-pulse" />

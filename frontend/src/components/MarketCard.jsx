@@ -23,12 +23,19 @@ const MarketCard = ({ market, id, onClick }) => {
       </div>
 
       <div className="flex justify-between items-start mb-8">
-        <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] border ${
-          market.resolved 
-            ? 'bg-gray-500/10 text-gray-500 border-gray-500/20' 
-            : 'bg-brand-primary/10 text-brand-primary border-brand-primary/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
-        }`}>
-          {market.resolved ? 'Resolved' : 'Active'}
+        <div className="flex space-x-2">
+          <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] border ${
+            market.resolved 
+              ? 'bg-gray-500/10 text-gray-500 border-gray-500/20' 
+              : 'bg-brand-primary/10 text-brand-primary border-brand-primary/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+          }`}>
+            {market.resolved ? 'Resolved' : 'Active'}
+          </div>
+          {market.isMock && (
+            <div className="px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-[0.2em] border bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+              Demo Market
+            </div>
+          )}
         </div>
         {!market.resolved && (
           <div className="flex items-center space-x-2 text-gray-500 font-mono text-[10px] font-bold">

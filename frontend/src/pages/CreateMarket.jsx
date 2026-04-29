@@ -3,7 +3,7 @@ import { Plus, X, Calendar, Rocket } from 'lucide-react';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CONTRACT_IDS } from '../hooks/useStellar';
 
-const CreateMarket = ({ submitSorobanTx, onBack }) => {
+const CreateMarket = ({ account, submitSorobanTx, onBack }) => {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState(['', '']);
   const [closeTime, setCloseTime] = useState('');
@@ -26,10 +26,11 @@ const CreateMarket = ({ submitSorobanTx, onBack }) => {
       const closeTimestamp = Math.floor(new Date(closeTime).getTime() / 1000);
       
       const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+      const filteredOptions = options.filter(o => o !== '');
       const op = marketContract.call('create_market',
-        StellarSdk.nativeToScVal(null, { type: 'address' }), // creator (handled by freighter auth)
-        StellarSdk.nativeToScVal(question, { type: 'symbol' }),
-        StellarSdk.nativeToScVal(options.filter(o => o !== ''), { type: 'vec' }),
+        StellarSdk.nativeToScVal(account, { type: 'address' }), // creator
+        StellarSdk.nativeToScVal(question, { type: 'string' }),
+        StellarSdk.nativeToScVal(filteredOptions), // Simplified array conversion
         StellarSdk.nativeToScVal(closeTimestamp, { type: 'u64' })
       );
 
@@ -51,7 +52,7 @@ const CreateMarket = ({ submitSorobanTx, onBack }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="glass p-8 rounded-[2.5rem] space-y-6 border border-white/5 bg-white/5">
+        <div className="glass-panel p-8 rounded-[2.5rem] space-y-6 border border-white/5 bg-white/5">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Market Question</label>
             <textarea
@@ -99,7 +100,7 @@ const CreateMarket = ({ submitSorobanTx, onBack }) => {
           </div>
         </div>
 
-        <div className="glass p-8 rounded-[2.5rem] space-y-2 border border-white/5 bg-white/5">
+        <div className="glass-panel p-8 rounded-[2.5rem] space-y-2 border border-white/5 bg-white/5">
           <div className="flex items-center space-x-2 text-gray-500 mb-2">
             <Calendar size={16} />
             <label className="text-[10px] font-black uppercase tracking-widest">Close Time</label>
@@ -115,7 +116,7 @@ const CreateMarket = ({ submitSorobanTx, onBack }) => {
 
         <button
           disabled={loading}
-          className="w-full py-5 gradient-bg rounded-3xl font-black text-lg uppercase tracking-widest flex items-center justify-center space-x-3 hover:opacity-90 transition-all active:scale-[0.99] shadow-2xl shadow-brand-primary/20 text-white"
+          className="premium-button w-full py-5 rounded-3xl font-black text-lg uppercase tracking-widest flex items-center justify-center space-x-3 hover:opacity-90 transition-all active:scale-[0.99] shadow-2xl shadow-brand-primary/20 text-white"
         >
           {loading ? (
             <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />

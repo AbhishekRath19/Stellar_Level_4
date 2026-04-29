@@ -1,17 +1,17 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, Map, panic_with_error};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, String, Vec, Map, panic_with_error};
 
 // Define the token client interface for inter-contract calls
 mod token {
-    soroban_sdk::contractimport!(file = "../token/target/wasm32-unknown-unknown/release/market_token.wasm");
+    soroban_sdk::contractimport!(file = "../target/wasm32-unknown-unknown/release/market_token.wasm");
 }
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Market {
     pub creator: Address,
-    pub question: Symbol,
-    pub options: Vec<Symbol>,
+    pub question: String,
+    pub options: Vec<String>,
     pub close_time: u64,
     pub resolved: bool,
     pub winning_option: u32,
@@ -34,13 +34,15 @@ impl PredictionMarket {
     pub fn create_market(
         e: Env,
         creator: Address,
-        question: Symbol,
-        options: Vec<Symbol>,
+        question: String,
+        options: Vec<String>,
         close_time: u64,
     ) -> u32 {
         creator.require_auth();
         assert!(options.len() >= 2, "At least 2 options required");
         assert!(close_time > e.ledger().timestamp(), "Close time must be in future");
+        
+        let market_id: u32 = e.storage().instance().get(&symbol_short!("count")).unwrap_or(0);
         
         let mut total_bets = Vec::new(&e);
         for _ in 0..options.len() {
@@ -48,8 +50,8 @@ impl PredictionMarket {
         }
 
         let market = Market {
-            creator,
-            question,
+            creator: creator.clone(),
+            question: question.clone(),
             options: options.clone(),
             close_time,
             resolved: false,
@@ -129,6 +131,43 @@ impl PredictionMarket {
 
     pub fn get_market(e: Env, market_id: u32) -> Market {
         e.storage().instance().get::<_, Market>(&market_id).expect("Market not found")
+    }
+
+    pub fn claim_winnings(e: Env, market_id: u32, user: Address) {
+        user.require_auth();
+        let market = e.storage().instance().get::<_, Market>(&market_id).expect("Market not found");
+        assert!(market.resolved, "Market not yet resolved");
+
+        let winning_option = market.winning_option;
+        let user_bet_key = (symbol_short!("ubet"), market_id, user.clone(), winning_option);
+        let user_winning_bet: i128 = e.storage().persistent().get(&user_bet_key).unwrap_or(0);
+        assert!(user_winning_bet > 0, "No winning positions to claim");
+
+        // Calculate total pool
+        let mut total_pool: i128 = 0;
+        for bet in market.total_bets.iter() {
+            total_pool += bet;
+        }
+
+        let winning_pool = market.total_bets.get(winning_option).unwrap();
+        
+        // Payout = (User Winning Bet / Total Winning Pool) * Total Pool
+        // In fixed-point math to avoid precision loss
+        let payout = (user_winning_bet * total_pool) / winning_pool;
+
+        // Reset user position to prevent double claiming
+        e.storage().persistent().set(&user_bet_key, &0i128);
+
+        // Transfer winnings
+        let token_addr = e.storage().instance().get::<_, Address>(&symbol_short!("token")).expect("Token not set");
+        let token_client = token::Client::new(&e, &token_addr);
+        token_client.transfer(&e.current_contract_address(), &user, &payout);
+
+        // Emit Claim Event
+        e.events().publish(
+            (symbol_short!("claim"), market_id, user),
+            payout
+        );
     }
 
     pub fn get_count(e: Env) -> u32 {

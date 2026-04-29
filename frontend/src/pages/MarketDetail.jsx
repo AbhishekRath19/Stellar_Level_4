@@ -8,11 +8,26 @@ import { CONTRACT_IDS } from '../hooks/useStellar';
 
 const RPC_URL = 'https://soroban-testnet.stellar.org';
 
+const safeScValToNative = (scVal) => {
+  if (scVal === null || scVal === undefined) return null;
+  try {
+    if (typeof scVal === 'string') {
+      return StellarSdk.scValToNative(StellarSdk.xdr.ScVal.fromXDR(scVal, 'base64'));
+    }
+    if (typeof scVal.switch !== 'function') return scVal;
+    return StellarSdk.scValToNative(scVal);
+  } catch (e) {
+    return scVal;
+  }
+};
+
 const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalance, refreshTrigger }) => {
   const [market, setMarket] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [userPositions, setUserPositions] = useState([]);
+  const [userBet, setUserBet] = useState(0); // This will hold the winnable amount if resolved
   const [showMobileBet, setShowMobileBet] = useState(false);
-  const [server] = useState(new StellarSdk.SorobanRpc.Server(RPC_URL));
+  const [server] = useState(new StellarSdk.rpc.Server(RPC_URL));
 
   useEffect(() => {
     fetchMarketData();
@@ -20,19 +35,49 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
 
   const fetchMarketData = async () => {
     try {
+      // 1. Handle Mock Markets
+      if (marketId.toString().startsWith('mock')) {
+        const mock = {
+          'mock-1': {
+            id: 'mock-1',
+            question: "Will XLM reach $1.00 by 2026?",
+            options: ["Yes", "No"],
+            totalBets: ["50000000", "20000000"],
+            closeTime: Math.floor(Date.now() / 1000) + 86400 * 10,
+            resolved: false,
+            winningOption: 0
+          },
+          'mock-2': {
+            id: 'mock-2',
+            question: "Will Soroban flip EVM in developer activity?",
+            options: ["Definitely", "Maybe", "Not yet"],
+            totalBets: ["10000000", "30000000", "5000000"],
+            closeTime: Math.floor(Date.now() / 1000) + 86400 * 5,
+            resolved: false,
+            winningOption: 0
+          }
+        }[marketId];
+
+        if (mock) {
+          setMarket(mock);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 2. Handle On-chain Markets
       const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
       
-      // Simulate a call to get_market
       const op = marketContract.call('get_market', StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }));
       const result = await server.simulateTransaction(
         new StellarSdk.TransactionBuilder(
-          new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'), // Dummy account
+          new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
           { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
-        ).addOperation(op).build()
+        ).addOperation(op).setTimeout(StellarSdk.TimeoutInfinite).build()
       );
 
-      if (result.result) {
-        const data = StellarSdk.scValToNative(result.result.retval);
+      if (result.result && result.result.retval) {
+        const data = safeScValToNative(result.result.retval);
         setMarket({
           id: marketId,
           question: data.question.toString(),
@@ -40,11 +85,47 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
           closeTime: Number(data.close_time),
           resolved: data.resolved,
           winningOption: data.winning_option,
-          totalBets: data.total_bets.map(b => b.toString())
+          totalBets: data.total_bets.map(b => b.toString()),
+          creator: data.creator.toString()
         });
+
+        if (account) {
+          const posPromises = data.options.map((_, idx) => {
+            const betOp = marketContract.call('get_user_bet', 
+              StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }),
+              StellarSdk.nativeToScVal(account, { type: 'address' }),
+              StellarSdk.nativeToScVal(idx, { type: 'u32' })
+            );
+            return server.simulateTransaction(
+              new StellarSdk.TransactionBuilder(
+                new StellarSdk.Account(account, '0'),
+                { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
+              ).addOperation(betOp).setTimeout(StellarSdk.TimeoutInfinite).build()
+            ).then(res => ({ idx, res }));
+          });
+
+          const posResults = await Promise.all(posPromises);
+          const activePositions = posResults
+            .map(r => ({
+              idx: r.idx,
+              amount: r.res.result && r.res.result.retval ? Number(safeScValToNative(r.res.result.retval)) / 1e7 : 0
+            }))
+            .filter(p => p.amount > 0);
+          
+          setUserPositions(activePositions);
+          
+          if (data.resolved) {
+            const winner = activePositions.find(p => p.idx === data.winning_option);
+            setUserBet(winner ? winner.amount : 0);
+          }
+        }
+      } else {
+        throw new Error("Market data not found on-chain");
       }
     } catch (error) {
       console.error("Failed to fetch Soroban market:", error);
+      alert("Synchronization Error: This market does not exist on the current network. Please deploy contracts and seed real markets.");
+      onBack();
     } finally {
       setLoading(false);
     }
@@ -122,16 +203,106 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
             </motion.div>
           )}
 
-          <div className="glass-panel p-10 space-y-6">
-            <div className="flex items-center space-x-3 text-brand-accent">
-              <ShieldCheck size={20} />
-              <h3 className="text-lg font-black uppercase tracking-tighter">Soroban Integrity</h3>
+          {market.resolved && userBet > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-panel p-10 border-green-500/20 bg-green-500/5 space-y-6"
+            >
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-green-400">Winning Position Detected</p>
+                  <p className="text-2xl font-black text-white">{userBet.toFixed(2)} MTK (Base)</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+                      const claimOp = marketContract.call('claim_winnings',
+                        StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }),
+                        StellarSdk.nativeToScVal(account, { type: 'address' })
+                      );
+                      await submitSorobanTx(claimOp);
+                      fetchMarketData();
+                      refreshBalance();
+                    } catch (e) {
+                      console.error(e);
+                      alert("Claim failed: " + e.message);
+                    }
+                  }}
+                  className="px-8 py-4 rounded-2xl bg-green-500 text-black text-xs font-black uppercase tracking-widest hover:bg-green-400 transition-all shadow-[0_0_20px_rgba(34,197,94,0.3)]"
+                >
+                  Claim Rewards
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+          <div className="glass-panel p-10 space-y-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3 text-brand-primary">
+                <ShieldCheck size={20} />
+                <h3 className="text-sm font-black uppercase tracking-widest">Protocol Integrity</h3>
+              </div>
+              {userPositions.length > 0 && (
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Your Holdings</span>
+              )}
             </div>
-            <p className="text-gray-500 font-medium leading-relaxed">
-              This market is executed on the Stellar network via Soroban smart contracts. 
-              Inter-contract calls ensure atomic settlement between the Prediction Market and the MTK Asset.
-            </p>
+
+            {userPositions.length > 0 ? (
+              <div className="grid gap-4">
+                {userPositions.map((pos) => (
+                  <div key={pos.idx} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
+                    <span className="text-xs font-black uppercase text-gray-400">{market.options[pos.idx]}</span>
+                    <span className="text-xs font-mono font-bold text-white">{pos.amount.toFixed(2)} MTK</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[10px] font-medium text-gray-600 leading-relaxed uppercase tracking-widest text-center py-4">
+                No active positions found for this account.
+              </p>
+            )}
           </div>
+
+          {account && !market.resolved && market.creator === account && (
+            <div className="glass-panel p-10 space-y-6 border-brand-primary/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3 text-brand-primary">
+                  <Trophy size={20} />
+                  <h3 className="text-lg font-black uppercase tracking-tighter">Creator Resolution</h3>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Admin Only</span>
+              </div>
+              <p className="text-gray-500 font-medium leading-relaxed text-sm">
+                As the creator, you have the authority to resolve this market. Select the winning outcome to trigger atomic payout distribution.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                {market.options.map((option, idx) => (
+                  <button
+                    key={idx}
+                    onClick={async () => {
+                      try {
+                        const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+                        const resolveOp = marketContract.call('resolve_market', 
+                          StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }),
+                          StellarSdk.nativeToScVal(idx, { type: 'u32' })
+                        );
+                        await submitSorobanTx(resolveOp);
+                        fetchMarketData();
+                      } catch (e) {
+                        console.error(e);
+                        alert("Resolution failed: " + e.message);
+                      }
+                    }}
+                    className="px-6 py-3 rounded-xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white hover:border-brand-primary/50 transition-all"
+                  >
+                    Resolve as: {option}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="hidden lg:block lg:col-span-5">
@@ -141,6 +312,7 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
                 <BetForm 
                   market={market} 
                   marketId={marketId} 
+                  account={account}
                   submitSorobanTx={submitSorobanTx}
                   onBetPlaced={() => {
                     fetchMarketData();
@@ -172,6 +344,7 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
               <BetForm 
                 market={market} 
                 marketId={marketId} 
+                account={account}
                 submitSorobanTx={submitSorobanTx}
                 transparent={true}
                 onBetPlaced={() => {

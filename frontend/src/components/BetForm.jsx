@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { CONTRACT_IDS } from '../hooks/useStellar';
 
-const BetForm = ({ market, marketId, submitSorobanTx, onBetPlaced, transparent = false }) => {
+const BetForm = ({ market, marketId, account, submitSorobanTx, onBetPlaced, transparent = false }) => {
   const isMobile = window.innerWidth < 640;
 
   const [selectedOption, setSelectedOption] = useState(null);
@@ -25,7 +25,7 @@ const BetForm = ({ market, marketId, submitSorobanTx, onBetPlaced, transparent =
       // 1. Approve Market to spend MTK
       const tokenContract = new StellarSdk.Contract(CONTRACT_IDS.TOKEN);
       const approveOp = tokenContract.call('approve', 
-        StellarSdk.nativeToScVal(null, { type: 'address' }), // 'from' is current account, sdk handles auth
+        StellarSdk.nativeToScVal(account, { type: 'address' }), 
         StellarSdk.nativeToScVal(CONTRACT_IDS.MARKET, { type: 'address' }),
         StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
       );
@@ -36,7 +36,7 @@ const BetForm = ({ market, marketId, submitSorobanTx, onBetPlaced, transparent =
       // 2. Place Bet
       const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
       const betOp = marketContract.call('place_bet',
-        StellarSdk.nativeToScVal(null, { type: 'address' }), // 'user'
+        StellarSdk.nativeToScVal(account, { type: 'address' }), // 'user'
         StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }),
         StellarSdk.nativeToScVal(selectedOption, { type: 'u32' }),
         StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
