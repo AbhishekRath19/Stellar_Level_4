@@ -55,3 +55,37 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
 }
+
+/* Mobile First Responsive Design Enhancements */
+@layer utilities {
+  .mobile-touch-target {
+    @apply min-h-[48px] min-w-[48px];
+  }
+}
+
+@media (max-width: 640px) {
+  .glass-panel {
+    @apply rounded-3xl p-6;
+  }
+  
+  .premium-button {
+    @apply w-full py-4 px-6;
+  }
+  
+  h1 {
+    @apply text-4xl leading-tight;
+  }
+}
+
+/* Ensure images and videos are responsive */
+img, video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Horizontal scroll for event logs on mobile */
+.events-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

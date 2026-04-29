@@ -87,94 +87,117 @@ export const useStellar = () => {
   }, [refreshBalance]);
 
   /**
-   * Fixed submitSorobanTx Function
-   * Handles Freighter responses robustly and submits to Soroban RPC
+   * CRITICAL: Final submission-ready submitSorobanTx
+   * Implements exact Freighter response extraction for Level 4 Bounty
    */
-  const submitSorobanTx = async (preparedTransaction) => {
+  const submitSorobanTx = async (tx) => {
     try {
       console.log("📤 Starting transaction submission...");
       
-      if (!preparedTransaction || typeof preparedTransaction.toXDR !== 'function') {
+      // Step 1: Validate transaction
+      if (!tx || typeof tx.toXDR !== 'function') {
         throw new Error("Invalid transaction object provided");
       }
 
-      // 1. Convert to XDR string BEFORE signing
-      const unsignedXdr = preparedTransaction.toXDR('base64');
+      // Step 2: Convert to XDR before signing
+      const unsignedXdr = tx.toXDR();
       console.log("✅ XDR generated (unsigned):", unsignedXdr.substring(0, 50) + "...");
 
-      // 2. Sign with Freighter - returns a BASE64 STRING
-      const signedResponse = await signTransaction(unsignedXdr, {
+      // Step 3: Sign with Freighter
+      console.log("🔐 Requesting signature from Freighter...");
+      const signResponse = await signTransaction(unsignedXdr, {
         network: 'TESTNET',
         networkPassphrase: NETWORK_PASSPHRASE,
       });
 
-      // 3. Extract XDR string from response
-      let signedXdrString = '';
+      console.log("📦 Sign response type:", typeof signResponse);
+      console.log("📦 Sign response:", signResponse);
+
+      // Step 4: CRITICAL FIX - Extract XDR from response object
+      let signedXdrString;
       
-      if (typeof signedResponse === 'string') {
-        signedXdrString = signedResponse;
-      } else if (signedResponse && typeof signedResponse === 'object') {
-        // Check for all common property names used by various versions of Freighter/SDKs
-        signedXdrString = signedResponse.signedTransaction || 
-                          signedResponse.xdr || 
-                          signedResponse.signedTx || 
-                          signedResponse.transaction ||
-                          '';
-        
-        // If we still don't have it, but the object itself has a toXDR or toString that looks like XDR
-        if (!signedXdrString && typeof signedResponse.toXDR === 'function') {
-          signedXdrString = signedResponse.toXDR();
+      if (typeof signResponse === 'string') {
+        // Old Freighter API - returns string directly
+        signedXdrString = signResponse;
+        console.log("✅ Using string response (old API)");
+      } else if (signResponse && typeof signResponse === 'object') {
+        // New Freighter API - check common keys including signedTxXdr
+        if (signResponse.signedTxXdr) {
+          signedXdrString = signResponse.signedTxXdr;
+          console.log("✅ Extracted signedTxXdr from response object");
+        } else if (signResponse.signedTransaction) {
+          signedXdrString = signResponse.signedTransaction;
+          console.log("✅ Extracted signedTransaction from response object");
+        } else if (signResponse.xdr) {
+          signedXdrString = signResponse.xdr;
+          console.log("✅ Extracted xdr from response object");
+        } else {
+          console.error("❌ Unknown response structure:", signResponse);
+          throw new Error("Could not extract signed XDR from Freighter response");
         }
+      } else {
+        throw new Error(`Unexpected response type: ${typeof signResponse}`);
       }
 
-      if (!signedXdrString || typeof signedXdrString !== 'string') {
-        console.error("❌ Signed response is invalid:", signedResponse);
-        throw new Error(`Expected signed XDR string, but could not extract it from response.`);
+      // Step 5: Validate we have a string
+      if (typeof signedXdrString !== 'string' || signedXdrString.length === 0) {
+        throw new Error("Signed XDR is not a valid string");
       }
 
-      console.log("✅ Transaction signed successfully");
+      console.log("✅ Signed XDR extracted successfully");
 
-      // 4. Rebuild transaction from signed XDR
-      const signedTransaction = StellarSdk.TransactionBuilder.fromXDR(
+      // Step 6: Rebuild transaction from signed XDR
+      const signedTransaction = new StellarSdk.Transaction(
         signedXdrString,
         NETWORK_PASSPHRASE
       );
 
-      // 5. Submit to Soroban RPC
-      console.log("📤 Submitting to Soroban network...");
+      // Step 7: Submit to Soroban RPC
+      console.log("📤 Submitting to Soroban RPC...");
       const response = await server.sendTransaction(signedTransaction);
-      
+
+      console.log("📬 Response status:", response.status);
+      console.log("📬 Response hash:", response.hash);
+
+      // Step 8: Poll for Confirmation
+      if (response.status === "PENDING" || response.status === "NOT_FOUND") {
+        console.log("⏳ Waiting for transaction confirmation...");
+        let attempt = 0;
+        const maxAttempts = 30; 
+        let txResponse;
+
+        while (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          attempt++;
+          console.log(`Polling... Attempt ${attempt}/${maxAttempts}`);
+
+          try {
+            txResponse = await server.getTransaction(response.hash);
+            
+            if (txResponse.status === "SUCCESS") {
+              console.log("✅ Transaction confirmed on ledger!");
+              refreshBalance(account);
+              return txResponse;
+            } else if (txResponse.status === "FAILED") {
+              console.error("❌ Transaction failed:", txResponse);
+              throw new Error(`Transaction failed: ${txResponse.resultXdr}`);
+            }
+          } catch (err) {
+            console.log(`⏳ Waiting... (${err.message || 'not ready'})`);
+          }
+        }
+        throw new Error("Transaction confirmation timeout");
+      }
+
       if (response.status === "ERROR") {
-        console.error("❌ RPC Submission Error:", response);
-        throw new Error(`Transaction Submission Failed: ${response.errorResultXdr}`);
+        console.error("❌ RPC Error:", response);
+        throw new Error(`Transaction error: ${response.errorResultXdr || 'Unknown error'}`);
       }
 
-      console.log("✅ Transaction hash:", response.hash);
-
-      // 6. Poll for Confirmation
-      console.log("⏳ Waiting for transaction confirmation...");
-      let getResponse = await server.getTransaction(response.hash);
-      let attempts = 0;
-      const maxAttempts = 30;
-
-      while ((getResponse.status === "NOT_FOUND" || getResponse.status === "PENDING") && attempts < maxAttempts) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        getResponse = await server.getTransaction(response.hash);
-        attempts++;
-        console.log(`Polling... Attempt ${attempts}/${maxAttempts}`);
-      }
-
-      if (getResponse.status === "SUCCESS") {
-        console.log("✅ Transaction confirmed!");
-        refreshBalance(account);
-        return getResponse;
-      } else {
-        console.error("❌ Transaction failed state:", getResponse);
-        throw new Error(`Transaction failed with status: ${getResponse.status}`);
-      }
+      return response;
 
     } catch (error) {
-      console.error("❌ Transaction submission error:", error);
+      console.error("❌ Transaction submission failed:", error);
       throw error;
     }
   };
@@ -190,30 +213,6 @@ export const useStellar = () => {
     }
   };
 
-  const adminMint = async (amount = 100000) => {
-    if (!account) throw new Error("Connect wallet first");
-    
-    const sourceAccount = await server.getAccount(account);
-    const contract = new StellarSdk.Contract(TOKEN_CONTRACT_ID);
-    const amountRaw = BigInt(Math.floor(parseFloat(amount) * 1e7));
-    
-    const operation = contract.call('mint', 
-      StellarSdk.nativeToScVal(account, { type: 'address' }),
-      StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
-    );
-
-    const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
-      fee: "1000",
-      networkPassphrase: NETWORK_PASSPHRASE,
-    })
-    .addOperation(operation)
-    .setTimeout(StellarSdk.TimeoutInfinite)
-    .build();
-
-    const prepared = await server.prepareTransaction(tx);
-    return submitSorobanTx(prepared);
-  };
-
   return { 
     account, 
     network, 
@@ -222,7 +221,6 @@ export const useStellar = () => {
     refreshBalance: () => refreshBalance(account), 
     submitSorobanTx,
     fundAccount,
-    adminMint,
     connecting 
   };
 };
