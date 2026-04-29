@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wallet, PlusCircle, LayoutDashboard, Menu, X, Activity } from 'lucide-react';
+import { Wallet, PlusCircle, LayoutDashboard, Menu, X, Activity, Coins } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Navbar = ({ account, connectWallet, tokenBalance, onNavigate, isOwner, network, connecting }) => {
