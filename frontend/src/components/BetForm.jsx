@@ -17,17 +17,23 @@ const BetForm = ({ market, marketId, account, submitSorobanTx, onBetPlaced, tran
     if (selectedOption === null || !amount) return;
 
     setLoading(true);
-    setStatus({ type: 'info', message: 'Verifying Permissions...' });
-
     try {
+      if (marketId.toString().startsWith('mock')) {
+        setStatus({ type: 'info', message: 'Simulating transaction for Demo Market...' });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setStatus({ type: 'success', message: 'Demo Position Initialized!' });
+        setAmount('');
+        onBetPlaced();
+        return;
+      }
+
+      setStatus({ type: 'info', message: 'Verifying Permissions...' });
       const amountRaw = BigInt(Math.floor(parseFloat(amount) * 1e7)); // 7 decimals for MTK
       const sourceAccount = await server.getAccount(account);
       
       // 1. Approve Market to spend MTK
       console.log("Building approval transaction...");
       const tokenContract = new StellarSdk.Contract(TOKEN_CONTRACT_ID);
-      
-      // Note: Standard Soroban tokens usually have (from, spender, amount, expiration)
       
       const approveTx = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: StellarSdk.BASE_FEE,
@@ -37,7 +43,7 @@ const BetForm = ({ market, marketId, account, submitSorobanTx, onBetPlaced, tran
         StellarSdk.nativeToScVal(account, { type: 'address' }), 
         StellarSdk.nativeToScVal(MARKET_CONTRACT_ID, { type: 'address' }),
         StellarSdk.nativeToScVal(amountRaw, { type: 'i128' }),
-        StellarSdk.nativeToScVal(9999999999, { type: 'u32' }) // Max expiration
+        StellarSdk.nativeToScVal(9999999, { type: 'u32' }) // Fixed U32 max value
       ))
       .setTimeout(30)
       .build();
