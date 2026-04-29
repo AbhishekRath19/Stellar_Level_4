@@ -41,12 +41,15 @@ const MOCK_MARKETS = [
   }
 ];
 
-const Home = ({ account, mintTokens, fundAccount, seedMarkets, onMarketClick, onNavigate, refreshBalance, refreshTrigger }) => {
+const Home = ({ account, mintTokens, fundAccount, seedMarkets, issueClassicToken, onMarketClick, onNavigate, refreshBalance, refreshTrigger }) => {
   const [markets, setMarkets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [buyAmount, setBuyAmount] = useState('');
   const [buyLoading, setBuyLoading] = useState(false);
+  const [classicCode, setClassicCode] = useState('');
+  const [classicAmount, setClassicAmount] = useState('');
+  const [classicLoading, setClassicLoading] = useState(false);
   const [server] = useState(new StellarSdk.rpc.Server(RPC_URL));
 
   useEffect(() => {
@@ -158,6 +161,27 @@ const Home = ({ account, mintTokens, fundAccount, seedMarkets, onMarketClick, on
     }
   };
 
+  const handleIssueClassic = async (e) => {
+    e.preventDefault();
+    if (!classicCode || !classicAmount || isNaN(classicAmount) || parseFloat(classicAmount) <= 0) {
+      alert("Please enter a valid code and amount");
+      return;
+    }
+    
+    setClassicLoading(true);
+    try {
+      const result = await issueClassicToken(classicCode.toUpperCase(), classicAmount);
+      alert(`Success! Issued ${classicAmount} ${classicCode.toUpperCase()} to your account.\nIssuer: ${result.issuer}\nTX: ${result.txHash.slice(0, 8)}...`);
+      setClassicCode('');
+      setClassicAmount('');
+    } catch (error) {
+      console.error("Classic issuance failed:", error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setClassicLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-24 pb-20">
       <section className="relative pt-12 text-center">
@@ -232,6 +256,59 @@ const Home = ({ account, mintTokens, fundAccount, seedMarkets, onMarketClick, on
                   </button>
                 )}
               </div>
+            </form>
+          </div>
+
+          {/* Classic Asset Issuance Section */}
+          <div className="glass-panel p-8 mt-12">
+            <div className="flex items-center justify-between mb-10">
+              <div className="space-y-1 text-white">
+                <h2 className="text-2xl font-black uppercase tracking-tight">Issue Classic</h2>
+                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Stellar Trustlines</p>
+              </div>
+              <ShieldCheck className="text-brand-primary" size={32} />
+            </div>
+
+            <form onSubmit={handleIssueClassic} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Code</label>
+                  <input
+                    type="text"
+                    value={classicCode}
+                    onChange={(e) => setClassicCode(e.target.value)}
+                    placeholder="e.g. USDC"
+                    maxLength={12}
+                    className="w-full h-12 bg-brand-dark/50 border-2 border-white/5 rounded-xl px-4 text-sm font-mono text-white focus:border-brand-primary/50 outline-none transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-2">Amount</label>
+                  <input
+                    type="number"
+                    value={classicAmount}
+                    onChange={(e) => setClassicAmount(e.target.value)}
+                    placeholder="0"
+                    className="w-full h-12 bg-brand-dark/50 border-2 border-white/5 rounded-xl px-4 text-sm font-mono text-white focus:border-brand-primary/50 outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                disabled={classicLoading || !classicCode || !classicAmount || !account}
+                className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white hover:bg-brand-primary/20 hover:border-brand-primary/50 transition-all flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {classicLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={16} />
+                    <span>Processing Trustline...</span>
+                  </>
+                ) : account ? 'Setup & Issue Asset' : 'Connect Wallet'}
+              </button>
+              
+              <p className="text-[9px] text-center text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
+                This will create a temporary issuer, <br /> establish a trustline, and send tokens.
+              </p>
             </form>
           </div>
         </div>

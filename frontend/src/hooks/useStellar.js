@@ -306,6 +306,82 @@ export const useStellar = () => {
     alert("Markets seeded successfully!");
   };
 
+  const issueClassicToken = async (assetCode, amount) => {
+    if (!account) throw new Error("Connect wallet first");
+    
+    try {
+      // 1. Generate a temporary issuer for this session
+      const issuer = StellarSdk.Keypair.random();
+      const asset = new StellarSdk.Asset(assetCode, issuer.publicKey());
+      
+      console.log("Issuer created:", issuer.publicKey());
+      
+      // 2. Fund the issuer so it can exist on ledger
+      await fetch(`https://friendbot.stellar.org?addr=${issuer.publicKey()}`);
+      
+      // 3. User creates Trustline (via Freighter)
+      const userAccountInfo = await server.getAccount(account);
+      const trustTx = new StellarSdk.TransactionBuilder(userAccountInfo, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase: NETWORK_PASSPHRASE,
+      })
+      .addOperation(StellarSdk.Operation.changeTrust({ asset }))
+      .setTimeout(StellarSdk.TimeoutInfinite)
+      .build();
+
+      const signedTrustXdr = await signTransaction(trustTx.toXDR(), { 
+        network: 'TESTNET',
+        networkPassphrase: NETWORK_PASSPHRASE
+      });
+      
+      // Extract XDR from Freighter response
+      let finalTrustXdr = typeof signedTrustXdr === 'object' ? signedTrustXdr.xdr || signedTrustXdr.signedTransaction || signedTrustXdr : signedTrustXdr;
+      
+      // Submit Trustline
+      await submitSorobanTx(finalTrustXdr);
+      console.log("Trustline established!");
+
+      // 4. Issuer sends tokens to User
+      // We need to wait a bit for the trustline to clear on ledger
+      await new Promise(r => setTimeout(r, 2000));
+      
+      const issuerAccountInfo = await server.getAccount(issuer.publicKey());
+      const paymentTx = new StellarSdk.TransactionBuilder(issuerAccountInfo, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase: NETWORK_PASSPHRASE,
+      })
+      .addOperation(StellarSdk.Operation.payment({
+        destination: account,
+        asset: asset,
+        amount: amount.toString()
+      }))
+      .setTimeout(StellarSdk.TimeoutInfinite)
+      .build();
+
+      paymentTx.sign(issuer);
+      
+      // Submit payment using the direct RPC method we built
+      const rpcResponse = await fetch(RPC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'sendTransaction',
+          params: { transaction: paymentTx.toXDR() }
+        })
+      });
+      
+      const rpcData = await rpcResponse.json();
+      console.log("Issuance complete:", rpcData);
+      return { asset, issuer: issuer.publicKey(), txHash: rpcData.result?.hash };
+      
+    } catch (err) {
+      console.error("Classic issuance failed:", err);
+      throw err;
+    }
+  };
+
   return { 
     account, 
     network, 
@@ -316,6 +392,7 @@ export const useStellar = () => {
     submitSorobanTx,
     fundAccount,
     seedMarkets,
+    issueClassicToken,
     connecting 
   };
 };

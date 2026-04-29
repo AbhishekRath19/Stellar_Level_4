@@ -11,7 +11,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [selectedMarketId, setSelectedMarketId] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const { account, network, tokenBalance, connectWallet, refreshBalance, mintTokens, submitSorobanTx, fundAccount, seedMarkets, connecting } = useStellar();
+  const { account, network, tokenBalance, connectWallet, refreshBalance, mintTokens, submitSorobanTx, fundAccount, seedMarkets, issueClassicToken, connecting } = useStellar();
 
   const handleMarketClick = (id) => {
     setSelectedMarketId(id);
@@ -29,6 +29,7 @@ function App() {
             mintTokens={mintTokens}
             fundAccount={fundAccount}
             seedMarkets={seedMarkets}
+            issueClassicToken={issueClassicToken}
             onMarketClick={handleMarketClick} 
             onNavigate={setCurrentPage}
             refreshBalance={refreshBalance} 
