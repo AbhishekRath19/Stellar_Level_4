@@ -5,8 +5,39 @@ import { useStellar } from '../hooks/useStellar';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { server, NETWORK_PASSPHRASE, TOKEN_CONTRACT_ID } from '../config/stellar';
 import { useSorobanEvents } from '../hooks/useSorobanEvents';
+import MarketCard from '../components/MarketCard';
 
-const Home = () => {
+const MOCK_MARKETS = [
+  {
+    id: 'mock-1',
+    question: "Will XLM reach $1.00 by 2026?",
+    options: ["Yes", "No"],
+    totalBets: ["50000000", "20000000"],
+    closeTime: Math.floor(Date.now() / 1000) + 86400 * 10,
+    resolved: false,
+    isMock: true
+  },
+  {
+    id: 'mock-2',
+    question: "Will Soroban adoption double in Q3?",
+    options: ["Yes", "No"],
+    totalBets: ["150000000", "80000000"],
+    closeTime: Math.floor(Date.now() / 1000) + 86400 * 30,
+    resolved: false,
+    isMock: true
+  },
+  {
+    id: 'mock-3',
+    question: "Will Stellar launch a new major partnership?",
+    options: ["Yes", "No"],
+    totalBets: ["300000000", "50000000"],
+    closeTime: Math.floor(Date.now() / 1000) + 86400 * 5,
+    resolved: false,
+    isMock: true
+  }
+];
+
+const Home = ({ onMarketClick }) => {
   const { account, tokenBalance, connectWallet, submitSorobanTx, connecting, fundAccount } = useStellar();
   const [amount, setAmount] = useState('');
   const [minting, setMinting] = useState(false);
@@ -252,6 +283,32 @@ const Home = () => {
               <p className="text-sm text-slate-400">Advanced automated market makers ensure you can always enter or exit your positions.</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Markets Section */}
+      <div className="mt-20">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-brand-primary/20 flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-brand-primary" />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black text-white">Live Markets</h2>
+              <p className="text-slate-400">Trade on the most popular predictions</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {MOCK_MARKETS.map((market) => (
+            <MarketCard 
+              key={market.id} 
+              id={market.id} 
+              market={market} 
+              onClick={onMarketClick} 
+            />
+          ))}
         </div>
       </div>
     </div>

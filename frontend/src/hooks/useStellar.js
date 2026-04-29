@@ -213,6 +213,60 @@ export const useStellar = () => {
     }
   };
 
+  const swapXlmToMtk = async (amount) => {
+    if (!account) throw new Error("Connect wallet first");
+    
+    console.log(`💱 Swapping ${amount} XLM for MTK...`);
+    // Mocking swap by minting MTK
+    const sourceAccount = await server.getAccount(account);
+    const contract = new StellarSdk.Contract(TOKEN_CONTRACT_ID);
+    const amountRaw = BigInt(Math.floor(parseFloat(amount) * 1e7));
+    
+    const operation = contract.call('mint', 
+      StellarSdk.nativeToScVal(account, { type: 'address' }),
+      StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: "1000",
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+    .addOperation(operation)
+    .setTimeout(StellarSdk.TimeoutInfinite)
+    .build();
+
+    const prepared = await server.prepareTransaction(tx);
+    return submitSorobanTx(prepared);
+  };
+
+  const swapMtkToXlm = async (amount) => {
+    if (!account) throw new Error("Connect wallet first");
+    
+    console.log(`💱 Swapping ${amount} MTK for XLM...`);
+    // Mocking swap for MTK -> XLM by transferring to a burn/pool address
+    const sourceAccount = await server.getAccount(account);
+    const contract = new StellarSdk.Contract(TOKEN_CONTRACT_ID);
+    const amountRaw = BigInt(Math.floor(parseFloat(amount) * 1e7));
+    
+    const poolAddress = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+    const operation = contract.call('transfer', 
+      StellarSdk.nativeToScVal(account, { type: 'address' }),
+      StellarSdk.nativeToScVal(poolAddress, { type: 'address' }),
+      StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
+    );
+
+    const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+      fee: "1000",
+      networkPassphrase: NETWORK_PASSPHRASE,
+    })
+    .addOperation(operation)
+    .setTimeout(StellarSdk.TimeoutInfinite)
+    .build();
+
+    const prepared = await server.prepareTransaction(tx);
+    return submitSorobanTx(prepared);
+  };
+
   return { 
     account, 
     network, 
@@ -221,6 +275,8 @@ export const useStellar = () => {
     refreshBalance: () => refreshBalance(account), 
     submitSorobanTx,
     fundAccount,
+    swapXlmToMtk,
+    swapMtkToXlm,
     connecting 
   };
 };
