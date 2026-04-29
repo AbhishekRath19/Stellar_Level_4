@@ -1,40 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, History, Gift, TrendingUp, Loader2 } from 'lucide-react';
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { CONTRACT_IDS } from '../hooks/useStellar';
-
-const RPC_URL = 'https://soroban-testnet.stellar.org';
-
-const safeScValToNative = (scVal) => {
-  if (scVal === null || scVal === undefined) return null;
-  try {
-    if (typeof scVal === 'string') {
-      return StellarSdk.scValToNative(StellarSdk.xdr.ScVal.fromXDR(scVal, 'base64'));
-    }
-    if (typeof scVal.switch !== 'function') return scVal;
-    return StellarSdk.scValToNative(scVal);
-  } catch (e) {
-    return scVal;
-  }
-};
+import { server, NETWORK_PASSPHRASE, MARKET_CONTRACT_ID, TOKEN_CONTRACT_ID } from '../config/stellar';
+import { safeScValToNative } from '../hooks/useStellar';
 
 const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
   const [bets, setBets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [server] = useState(new StellarSdk.rpc.Server(RPC_URL));
 
   const fetchMyBets = async () => {
     if (!account) return;
     setLoading(true);
     try {
-      const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+      const marketContract = new StellarSdk.Contract(MARKET_CONTRACT_ID);
       
-      // 1. Get count
       const countOp = marketContract.call('get_count');
       const countResult = await server.simulateTransaction(
         new StellarSdk.TransactionBuilder(
           new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
-          { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
+          { fee: '100', networkPassphrase: NETWORK_PASSPHRASE }
         ).addOperation(countOp).setTimeout(StellarSdk.TimeoutInfinite).build()
       );
 
@@ -43,13 +27,12 @@ const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
         const userBetsArr = [];
         const userAddress = StellarSdk.Address.fromString(account);
 
-        // Fetch each market and check user bets
         for (let i = 0; i < count; i++) {
           const mOp = marketContract.call('get_market', StellarSdk.nativeToScVal(i, { type: 'u32' }));
           const mResult = await server.simulateTransaction(
             new StellarSdk.TransactionBuilder(
               new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
-              { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
+              { fee: '100', networkPassphrase: NETWORK_PASSPHRASE }
             ).addOperation(mOp).setTimeout(StellarSdk.TimeoutInfinite).build()
           );
           
@@ -58,17 +41,16 @@ const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
             const positions = [];
             let totalOnMarket = 0;
 
-            // Check each option
             for (let j = 0; j < data.options.length; j++) {
               const betOp = marketContract.call('get_user_bet', 
                 StellarSdk.nativeToScVal(i, { type: 'u32' }),
-                userAddress.toScVal(),
+                userAddress.toScValue(),
                 StellarSdk.nativeToScVal(j, { type: 'u32' })
               );
               const betResult = await server.simulateTransaction(
                 new StellarSdk.TransactionBuilder(
                   new StellarSdk.Account('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', '0'),
-                  { fee: '100', networkPassphrase: 'Test SDF Network ; September 2015' }
+                  { fee: '100', networkPassphrase: NETWORK_PASSPHRASE }
                 ).addOperation(betOp).setTimeout(StellarSdk.TimeoutInfinite).build()
               );
 
@@ -77,7 +59,7 @@ const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
                 if (amount > 0) {
                   positions.push({ 
                     option: data.options[j].toString(), 
-                    amount: (Number(amount) / 10000000).toFixed(2), // Assuming 7 decimals standard
+                    amount: (Number(amount) / 10000000).toFixed(2),
                     optionIndex: j 
                   });
                   totalOnMarket += Number(amount) / 10000000;
@@ -112,12 +94,24 @@ const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
 
   const handleClaim = async (marketId) => {
     try {
-      const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+      const sourceAccount = await server.getAccount(account);
+      const marketContract = new StellarSdk.Contract(MARKET_CONTRACT_ID);
       const claimOp = marketContract.call('claim_winnings',
         StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }),
         StellarSdk.nativeToScVal(account, { type: 'address' })
       );
-      await submitSorobanTx(claimOp);
+
+      const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase: NETWORK_PASSPHRASE,
+      })
+      .addOperation(claimOp)
+      .setTimeout(30)
+      .build();
+
+      const prepared = await server.prepareTransaction(tx);
+      await submitSorobanTx(prepared);
+      
       fetchMyBets();
       refreshBalance();
     } catch (e) {

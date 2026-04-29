@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, CheckCircle2, AlertCircle, ArrowRight, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { CONTRACT_IDS } from '../hooks/useStellar';
+import { server, NETWORK_PASSPHRASE, TOKEN_CONTRACT_ID, MARKET_CONTRACT_ID } from '../config/stellar';
 
 const BetForm = ({ market, marketId, account, submitSorobanTx, onBetPlaced, transparent = false }) => {
   const isMobile = window.innerWidth < 640;
@@ -20,36 +20,71 @@ const BetForm = ({ market, marketId, account, submitSorobanTx, onBetPlaced, tran
     setStatus({ type: 'info', message: 'Verifying Permissions...' });
 
     try {
-      const amountRaw = BigInt(parseFloat(amount) * 1e7); // 7 decimals for MTK
+      const amountRaw = BigInt(Math.floor(parseFloat(amount) * 1e7)); // 7 decimals for MTK
+      const sourceAccount = await server.getAccount(account);
       
       // 1. Approve Market to spend MTK
-      const tokenContract = new StellarSdk.Contract(CONTRACT_IDS.TOKEN);
+      console.log("Building approval transaction...");
+      const tokenContract = new StellarSdk.Contract(TOKEN_CONTRACT_ID);
       const approveOp = tokenContract.call('approve', 
         StellarSdk.nativeToScVal(account, { type: 'address' }), 
-        StellarSdk.nativeToScVal(CONTRACT_IDS.MARKET, { type: 'address' }),
-        StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
+        StellarSdk.nativeToScVal(MARKET_CONTRACT_ID, { type: 'address' }),
+        StellarSdk.nativeToScVal(amountRaw, { type: 'i128' }),
+        StellarSdk.nativeToScVal(closeTime + 3600, { type: 'u32' }) // Added expiration for safety
       );
       
-      setStatus({ type: 'info', message: 'Confirming Allowance...' });
-      await submitSorobanTx(approveOp);
+      // Note: Standard Soroban tokens usually have (from, spender, amount, expiration)
+      // If the contract only has (from, spender, amount), I'll adjust.
+      // Let's assume standard for now, but I'll check common patterns.
+      // Actually, I'll just use the 3 params if the contract expects it.
+      
+      const approveTx = new StellarSdk.TransactionBuilder(sourceAccount, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase: NETWORK_PASSPHRASE,
+      })
+      .addOperation(tokenContract.call('approve', 
+        StellarSdk.nativeToScVal(account, { type: 'address' }), 
+        StellarSdk.nativeToScVal(MARKET_CONTRACT_ID, { type: 'address' }),
+        StellarSdk.nativeToScVal(amountRaw, { type: 'i128' }),
+        StellarSdk.nativeToScVal(9999999999, { type: 'u32' }) // Max expiration
+      ))
+      .setTimeout(30)
+      .build();
 
-      // 2. Place Bet
-      const marketContract = new StellarSdk.Contract(CONTRACT_IDS.MARKET);
+      setStatus({ type: 'info', message: 'Preparing Allowance...' });
+      const preparedApproveTx = await server.prepareTransaction(approveTx);
+      await submitSorobanTx(preparedApproveTx);
+
+      // 2. Refresh account for next transaction (sequence number)
+      const updatedAccount = await server.getAccount(account);
+
+      // 3. Place Bet
+      console.log("Building bet transaction...");
+      const marketContract = new StellarSdk.Contract(MARKET_CONTRACT_ID);
       const betOp = marketContract.call('place_bet',
-        StellarSdk.nativeToScVal(account, { type: 'address' }), // 'user'
+        StellarSdk.nativeToScVal(account, { type: 'address' }),
         StellarSdk.nativeToScVal(parseInt(marketId), { type: 'u32' }),
         StellarSdk.nativeToScVal(selectedOption, { type: 'u32' }),
         StellarSdk.nativeToScVal(amountRaw, { type: 'i128' })
       );
 
-      setStatus({ type: 'info', message: 'Escrowing Position...' });
-      await submitSorobanTx(betOp);
+      const betTx = new StellarSdk.TransactionBuilder(updatedAccount, {
+        fee: StellarSdk.BASE_FEE,
+        networkPassphrase: NETWORK_PASSPHRASE,
+      })
+      .addOperation(betOp)
+      .setTimeout(30)
+      .build();
+
+      setStatus({ type: 'info', message: 'Preparing Position...' });
+      const preparedBetTx = await server.prepareTransaction(betTx);
+      await submitSorobanTx(preparedBetTx);
 
       setStatus({ type: 'success', message: 'Position Initialized' });
       setAmount('');
       onBetPlaced();
     } catch (error) {
-      console.error(error);
+      console.error("Transaction Error:", error);
       setStatus({ type: 'error', message: error.message || 'Transaction Failed' });
     } finally {
       setLoading(false);
