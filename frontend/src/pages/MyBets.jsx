@@ -22,10 +22,11 @@ const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
         ).addOperation(countOp).setTimeout(StellarSdk.TimeoutInfinite).build()
       );
 
+      let userBetsArr = [];
+      const userAddress = StellarSdk.Address.fromString(account);
+
       if (countResult.result && countResult.result.retval) {
         const count = safeScValToNative(countResult.result.retval);
-        const userBetsArr = [];
-        const userAddress = StellarSdk.Address.fromString(account);
 
         for (let i = 0; i < count; i++) {
           const mOp = marketContract.call('get_market', StellarSdk.nativeToScVal(i, { type: 'u32' }));
@@ -79,8 +80,43 @@ const MyBets = ({ account, refreshBalance, submitSorobanTx }) => {
             }
           }
         }
-        setBets(userBetsArr);
       }
+
+      // Add mock bets from local storage
+      const mockBetsData = JSON.parse(localStorage.getItem('mockBets') || '[]');
+      const MOCK_MARKETS = {
+        'mock-1': { question: "Will XLM reach $1.00 by 2026?" },
+        'mock-2': { question: "Will Soroban adoption double in Q3?" },
+        'mock-3': { question: "Will Stellar launch a new major partnership?" }
+      };
+      
+      const mockPositionsByMarket = {};
+      mockBetsData.forEach(bet => {
+        if (!mockPositionsByMarket[bet.marketId]) {
+           mockPositionsByMarket[bet.marketId] = {
+             id: bet.marketId,
+             question: MOCK_MARKETS[bet.marketId]?.question || "Demo Market",
+             positions: [],
+             total: 0,
+             resolved: false,
+             winningOption: null,
+             isMock: true
+           };
+        }
+        mockPositionsByMarket[bet.marketId].positions.push({
+          option: bet.option,
+          amount: bet.amount,
+          optionIndex: bet.optionIndex
+        });
+        mockPositionsByMarket[bet.marketId].total += parseFloat(bet.amount);
+      });
+      
+      Object.values(mockPositionsByMarket).forEach(market => {
+         market.total = market.total.toFixed(2);
+         userBetsArr.push(market);
+      });
+
+      setBets(userBetsArr);
     } catch (error) {
       console.error("Failed to fetch user bets:", error);
     } finally {

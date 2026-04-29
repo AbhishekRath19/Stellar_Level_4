@@ -21,6 +21,17 @@ const BetForm = ({ market, marketId, account, submitSorobanTx, onBetPlaced, tran
       if (marketId.toString().startsWith('mock')) {
         setStatus({ type: 'info', message: 'Simulating transaction for Demo Market...' });
         await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        const stored = JSON.parse(localStorage.getItem('mockBets') || '[]');
+        stored.push({
+          marketId,
+          option: market.options[selectedOption],
+          optionIndex: selectedOption,
+          amount: parseFloat(amount).toFixed(2),
+          timestamp: Date.now()
+        });
+        localStorage.setItem('mockBets', JSON.stringify(stored));
+
         setStatus({ type: 'success', message: 'Demo Position Initialized!' });
         setAmount('');
         onBetPlaced();
