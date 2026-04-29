@@ -7,16 +7,17 @@
 
 **Production:** [https://stellar-level-4-ten.vercel.app](https://stellar-level-4-ten.vercel.app)
 
-## 📱 Screenshots
+### Platform Overview
+![Home](./screenshots/home.png)
 
-### Desktop View
-![Desktop](./screenshots/desktop.png)
+### Prediction Markets
+![Markets](./screenshots/markets.png)
 
-### Mobile View
-![Mobile](./screenshots/mobile-view.png)
+### MTK Swap
+![Swap](./screenshots/swap.png)
 
-### CI/CD Pipeline
-![CI/CD](./screenshots/cicd-passing.png)
+### User Portfolio
+![Portfolio](./screenshots/portfolio.png)
 
 ## 🎯 Level 4 Requirements Checklist
 
