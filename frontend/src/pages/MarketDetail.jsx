@@ -160,9 +160,14 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
                 <ShieldCheck className="text-brand-primary" size={24} />
               </div>
               <BetForm 
-                options={market.options} 
-                onSubmit={handlePlaceBet} 
-                disabled={market.resolved}
+                market={market}
+                marketId={marketId}
+                account={account}
+                submitSorobanTx={submitSorobanTx}
+                onBetPlaced={() => {
+                  refreshBalance();
+                  fetchMarketData();
+                }}
               />
            </div>
         </div>

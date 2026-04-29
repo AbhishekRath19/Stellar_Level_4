@@ -26,17 +26,8 @@ const BetForm = ({ market, marketId, account, submitSorobanTx, onBetPlaced, tran
       // 1. Approve Market to spend MTK
       console.log("Building approval transaction...");
       const tokenContract = new StellarSdk.Contract(TOKEN_CONTRACT_ID);
-      const approveOp = tokenContract.call('approve', 
-        StellarSdk.nativeToScVal(account, { type: 'address' }), 
-        StellarSdk.nativeToScVal(MARKET_CONTRACT_ID, { type: 'address' }),
-        StellarSdk.nativeToScVal(amountRaw, { type: 'i128' }),
-        StellarSdk.nativeToScVal(closeTime + 3600, { type: 'u32' }) // Added expiration for safety
-      );
       
       // Note: Standard Soroban tokens usually have (from, spender, amount, expiration)
-      // If the contract only has (from, spender, amount), I'll adjust.
-      // Let's assume standard for now, but I'll check common patterns.
-      // Actually, I'll just use the 3 params if the contract expects it.
       
       const approveTx = new StellarSdk.TransactionBuilder(sourceAccount, {
         fee: StellarSdk.BASE_FEE,
