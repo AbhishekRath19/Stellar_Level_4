@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Share2, Info, Trophy, ChevronUp, ShieldCheck, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Share2, Info, Trophy, ChevronUp, ShieldCheck, TrendingUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import BetForm from '../components/BetForm';
