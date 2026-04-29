@@ -26,6 +26,16 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
             id: 'mock-1', question: "Will XLM reach $1.00 by 2026?", options: ["Yes", "No"],
             totalBets: ["50000000", "20000000"], closeTime: Math.floor(Date.now() / 1000) + 86400 * 10,
             resolved: false, winningOption: 0
+          },
+          'mock-2': {
+            id: 'mock-2', question: "Will Soroban adoption double in Q3?", options: ["Yes", "No"],
+            totalBets: ["150000000", "80000000"], closeTime: Math.floor(Date.now() / 1000) + 86400 * 30,
+            resolved: false, winningOption: 0
+          },
+          'mock-3': {
+            id: 'mock-3', question: "Will Stellar launch a new major partnership?", options: ["Yes", "No"],
+            totalBets: ["300000000", "50000000"], closeTime: Math.floor(Date.now() / 1000) + 86400 * 5,
+            resolved: false, winningOption: 0
           }
         };
         setMarket(mock[marketId] || mock['mock-1']);
@@ -113,6 +123,8 @@ const MarketDetail = ({ marketId, account, submitSorobanTx, onBack, refreshBalan
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-primary" size={48} /></div>;
+
+  if (!market) return <div className="h-screen flex items-center justify-center"><div className="text-white text-xl">Market not found</div></div>;
 
   return (
     <div className="max-w-5xl mx-auto space-y-12">
